@@ -1,0 +1,197 @@
+# libp2p Privacy Analysis Tool
+
+> ⚠️ **PROOF OF CONCEPT** - Mock ZK proofs for demonstration only
+
+A privacy analysis tool for py-libp2p that detects privacy leaks and demonstrates zero-knowledge proof concepts.
+
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+
+## Quick Start
+
+### Installation
+
+```bash
+cd libp2p_privacy_poc
+pip install -e .
+```
+
+### Run Analysis
+
+```bash
+# Console analysis (uses simulated data for demonstration)
+libp2p-privacy analyze
+
+# HTML report with ZK proofs
+libp2p-privacy analyze --format html --with-zk-proofs --output report.html
+
+# Run demonstrations
+libp2p-privacy demo
+```
+
+### Use in Python
+
+```python
+from libp2p_privacy_poc import MetadataCollector, PrivacyAnalyzer
+
+# Attach to your libp2p host
+collector = MetadataCollector(your_host)
+
+# Or use with simulated events for testing
+collector.on_connection_opened(peer_id, multiaddr, "outbound")
+
+# Analyze privacy
+report = PrivacyAnalyzer(collector).analyze()
+print(report.summary())
+```
+
+## What It Does
+
+✅ **Privacy Leak Detection** - Identifies 6 types of privacy risks:
+- Peer linkability
+- Timing correlations
+- Small anonymity sets
+- Protocol fingerprinting
+- Session tracking
+- Connection patterns
+
+✅ **Mock ZK Proofs** - Demonstrates ZK proof concepts:
+- Anonymity set membership ("I'm one of N peers")
+- Session unlinkability  
+- Range proofs
+- Timing independence
+
+✅ **Multiple Report Formats** - Console, JSON, and HTML reports
+
+## CLI Commands
+
+```bash
+# Analyze privacy
+libp2p-privacy analyze [OPTIONS]
+  --format {console,json,html}
+  --output PATH
+  --with-zk-proofs
+  --verbose
+
+# Run demos
+libp2p-privacy demo [OPTIONS]
+  --scenario {all,timing,linkability,anonymity}
+
+# Show version
+libp2p-privacy version
+```
+
+## Project Structure
+
+```
+libp2p_privacy_poc/
+├── libp2p_privacy_poc/      # Main package
+│   ├── metadata_collector.py    # Event capture (430 lines)
+│   ├── privacy_analyzer.py      # Privacy analysis (526 lines)
+│   ├── mock_zk_proofs.py        # Mock ZK system (482 lines)
+│   ├── report_generator.py      # Reports (423 lines)
+│   ├── cli.py                   # CLI (370+ lines)
+│   └── zk_integration.py        # ZK integration (419 lines)
+├── examples/
+│   └── basic_analysis.py        # Working example
+├── tests/
+│   └── test_basic_integration.py
+├── README.md                    # This file
+└── DOCUMENTATION.md             # Complete guide
+```
+
+## Documentation
+
+📖 **[Complete Documentation](DOCUMENTATION.md)** - Everything you need:
+- Detailed installation
+- CLI usage guide
+- Integration guide
+- API documentation
+- Architecture details
+- Production roadmap
+- Troubleshooting
+
+## Example Output
+
+```
+Privacy Analysis Report
+Overall Risk Score: 0.66/1.00
+Risk Level: HIGH
+
+Privacy Risks Detected: 3
+  - CRITICAL: 0
+  - HIGH: 1 (Small Anonymity Set)
+  - MEDIUM: 1 (Timing Correlation)
+  - LOW: 1 (Burst Pattern)
+
+Recommendations:
+1. Add random delays between connections
+2. Connect to more peers to increase anonymity set
+3. Implement timing obfuscation
+```
+
+## Requirements
+
+- Python 3.9+
+- py-libp2p 0.2.0+
+- See `requirements.txt` for all dependencies
+
+## Important Disclaimers
+
+⚠️ **This is a Proof of Concept**
+
+- **Demonstration Mode**: Uses simulated network data for testing
+- **Mock ZK Proofs**: No cryptographic guarantees  
+- **No Security Audit**: Not audited
+- **Basic Algorithms**: Heuristic-based detection
+- **Not Production Ready**: Requires real ZK implementation
+
+**Note**: Currently demonstrates privacy analysis concepts with simulated data. See [KNOWN_ISSUES.md](KNOWN_ISSUES.md) for technical details.
+
+**DO NOT use in production without:**
+- Real network connection integration
+- Real ZK implementation (PySnark2/Groth16)
+- Security audit
+- Performance optimization
+- Comprehensive testing
+
+## Roadmap
+
+**Phase 1: PoC** ✅ Complete
+- Privacy analysis algorithms
+- Mock ZK proof system
+- CLI and reporting
+
+**Phase 2: Real ZK** 
+- PySnark2 integration
+- Groth16 proofs
+- Cryptographic verification
+
+**Phase 3: Production** 
+- Security audit
+- Performance optimization
+- Production deployment
+
+## Contributing
+Areas for contribution:
+- Real ZK circuit design
+- Privacy algorithm improvements
+- Performance optimization
+- Testing and validation
+
+## Statistics
+
+- **Code**: ~3,000 lines
+- **Documentation**: 4 files
+- **Privacy Detection Algorithms**: 6
+- **ZK Proof Types**: 4
+- **Report Formats**: 3
+- **Completion**: ~80%
+
+## License
+
+MIT License
+
+---

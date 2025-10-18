@@ -1,0 +1,418 @@
+"""
+ZK Integration Module
+
+This module provides the integration layer between privacy analysis and ZK proofs.
+It defines ZK-ready data structures and interfaces for future real ZK implementation.
+
+Key responsibilities:
+- Prepare data for ZK circuit inputs
+- Define ZK-compatible data structures
+- Provide interfaces for proof generation
+- Handle proof verification and storage
+"""
+
+import hashlib
+import json
+from dataclasses import dataclass, field
+from typing import Any, Dict, List, Optional, Tuple
+
+from libp2p_privacy_poc.mock_zk_proofs import MockZKProofSystem, MockZKProof, ZKProofType
+from libp2p_privacy_poc.privacy_analyzer import PrivacyReport, PrivacyRisk
+
+
+@dataclass
+class ZKReadyData:
+    """
+    Data structure optimized for ZK circuit inputs.
+    
+    In production, this would be serialized in a format compatible with
+    ZK circuits (field elements, commitments, etc.)
+    """
+    data_type: str
+    values: Dict[str, Any] = field(default_factory=dict)
+    commitments: Dict[str, str] = field(default_factory=dict)
+    public_inputs: Dict[str, Any] = field(default_factory=dict)
+    private_inputs: Dict[str, Any] = field(default_factory=dict)
+    
+    def to_circuit_input(self) -> dict:
+        """
+        Convert to format suitable for ZK circuit input.
+        
+        In production, this would convert to field elements for the ZK circuit.
+        """
+        return {
+            "public": self.public_inputs,
+            "private": self.private_inputs,
+            "commitments": self.commitments,
+        }
+    
+    def to_dict(self) -> dict:
+        """Convert to dictionary for serialization."""
+        return {
+            "data_type": self.data_type,
+            "values": self.values,
+            "commitments": self.commitments,
+            "public_inputs": self.public_inputs,
+            "private_inputs": self.private_inputs,
+        }
+
+
+class ZKDataPreparator:
+    """
+    Prepares privacy analysis data for ZK proof generation.
+    
+    This class transforms raw privacy metadata into ZK-ready formats.
+    """
+    
+    def prepare_anonymity_set_data(
+        self,
+        peer_id: str,
+        all_peer_ids: List[str]
+    ) -> ZKReadyData:
+        """
+        Prepare data for anonymity set membership proof.
+        
+        Args:
+            peer_id: The peer ID to prove membership for
+            all_peer_ids: All peer IDs in the anonymity set
+        
+        Returns:
+            ZKReadyData ready for circuit input
+        """
+        # Create commitment to peer_id (hide the actual value)
+        peer_commitment = hashlib.sha256(peer_id.encode()).hexdigest()
+        
+        # Create Merkle tree root of anonymity set (public input)
+        merkle_root = self._compute_mock_merkle_root(all_peer_ids)
+        
+        # Find position in set (private input)
+        try:
+            position = all_peer_ids.index(peer_id)
+        except ValueError:
+            position = -1
+        
+        return ZKReadyData(
+            data_type="anonymity_set_membership",
+            values={
+                "anonymity_set_size": len(all_peer_ids),
+                "peer_position": position,
+            },
+            commitments={
+                "peer_id": peer_commitment,
+            },
+            public_inputs={
+                "merkle_root": merkle_root,
+                "set_size": len(all_peer_ids),
+            },
+            private_inputs={
+                "peer_id": peer_id,
+                "position": position,
+                "merkle_proof": self._compute_mock_merkle_proof(all_peer_ids, position),
+            }
+        )
+    
+    def prepare_unlinkability_data(
+        self,
+        session_1_id: str,
+        session_2_id: str,
+        session_1_metadata: dict,
+        session_2_metadata: dict
+    ) -> ZKReadyData:
+        """
+        Prepare data for session unlinkability proof.
+        
+        Args:
+            session_1_id: First session identifier
+            session_2_id: Second session identifier
+            session_1_metadata: Metadata for first session
+            session_2_metadata: Metadata for second session
+        
+        Returns:
+            ZKReadyData ready for circuit input
+        """
+        # Create commitments to session identifiers
+        session_1_commitment = hashlib.sha256(session_1_id.encode()).hexdigest()
+        session_2_commitment = hashlib.sha256(session_2_id.encode()).hexdigest()
+        
+        return ZKReadyData(
+            data_type="session_unlinkability",
+            values={
+                "sessions_unlinkable": session_1_id != session_2_id,
+            },
+            commitments={
+                "session_1": session_1_commitment,
+                "session_2": session_2_commitment,
+            },
+            public_inputs={
+                "session_1_commitment": session_1_commitment,
+                "session_2_commitment": session_2_commitment,
+            },
+            private_inputs={
+                "session_1_id": session_1_id,
+                "session_2_id": session_2_id,
+                "session_1_metadata": session_1_metadata,
+                "session_2_metadata": session_2_metadata,
+            }
+        )
+    
+    def prepare_range_proof_data(
+        self,
+        value_name: str,
+        actual_value: int,
+        min_value: int,
+        max_value: int
+    ) -> ZKReadyData:
+        """
+        Prepare data for range proof.
+        
+        Args:
+            value_name: Name of the value
+            actual_value: The actual value (kept private)
+            min_value: Minimum acceptable value
+            max_value: Maximum acceptable value
+        
+        Returns:
+            ZKReadyData ready for circuit input
+        """
+        # Create commitment to actual value
+        value_commitment = hashlib.sha256(f"{value_name}_{actual_value}".encode()).hexdigest()
+        
+        return ZKReadyData(
+            data_type="range_proof",
+            values={
+                "value_name": value_name,
+                "in_range": min_value <= actual_value <= max_value,
+            },
+            commitments={
+                "value": value_commitment,
+            },
+            public_inputs={
+                "min_value": min_value,
+                "max_value": max_value,
+                "value_commitment": value_commitment,
+            },
+            private_inputs={
+                "actual_value": actual_value,
+                "blinding_factor": "mock_blinding_factor",
+            }
+        )
+    
+    def _compute_mock_merkle_root(self, items: List[str]) -> str:
+        """Compute mock Merkle tree root."""
+        if not items:
+            return hashlib.sha256(b"empty").hexdigest()
+        
+        # Simple mock: hash all items together
+        combined = "".join(sorted(items))
+        return hashlib.sha256(combined.encode()).hexdigest()
+    
+    def _compute_mock_merkle_proof(self, items: List[str], position: int) -> List[str]:
+        """Compute mock Merkle proof path."""
+        if position < 0 or position >= len(items):
+            return []
+        
+        # Mock proof path (would be real Merkle siblings in production)
+        return [
+            hashlib.sha256(f"sibling_{i}".encode()).hexdigest()
+            for i in range(3)  # Assume tree depth of 3
+        ]
+
+
+class ZKPrivacyEnhancer:
+    """
+    Enhances privacy reports with ZK proofs.
+    
+    This class takes privacy analysis results and generates ZK proofs
+    to provide cryptographic guarantees about privacy properties.
+    """
+    
+    def __init__(self):
+        """Initialize the ZK privacy enhancer."""
+        self.zk_system = MockZKProofSystem()
+        self.data_preparator = ZKDataPreparator()
+    
+    def enhance_report_with_zk_proofs(
+        self,
+        report: PrivacyReport,
+        peer_ids: List[str],
+        session_ids: List[str]
+    ) -> Dict[str, List[MockZKProof]]:
+        """
+        Enhance a privacy report with ZK proofs.
+        
+        Args:
+            report: The privacy report to enhance
+            peer_ids: List of all peer IDs in the network
+            session_ids: List of session identifiers
+        
+        Returns:
+            Dictionary mapping proof types to generated proofs
+        """
+        zk_proofs = {
+            "anonymity_proofs": [],
+            "unlinkability_proofs": [],
+            "range_proofs": [],
+        }
+        
+        # Generate anonymity set proofs for each peer
+        if peer_ids:
+            for peer_id in peer_ids[:5]:  # Limit to first 5 for demo
+                proof = self.zk_system.generate_anonymity_set_proof(
+                    peer_id=peer_id,
+                    anonymity_set_size=len(peer_ids)
+                )
+                zk_proofs["anonymity_proofs"].append(proof)
+        
+        # Generate unlinkability proofs for session pairs
+        if len(session_ids) >= 2:
+            for i in range(min(3, len(session_ids) - 1)):  # Limit to 3 pairs
+                proof = self.zk_system.generate_unlinkability_proof(
+                    session_1_id=session_ids[i],
+                    session_2_id=session_ids[i + 1]
+                )
+                zk_proofs["unlinkability_proofs"].append(proof)
+        
+        # Generate range proofs for metrics
+        if report.statistics:
+            if "total_connections" in report.statistics:
+                proof = self.zk_system.generate_range_proof(
+                    value_name="connection_count",
+                    min_value=10,
+                    max_value=1000,
+                    actual_value=report.statistics["total_connections"]
+                )
+                zk_proofs["range_proofs"].append(proof)
+        
+        return zk_proofs
+    
+    def generate_privacy_certificate(
+        self,
+        report: PrivacyReport,
+        zk_proofs: Dict[str, List[MockZKProof]]
+    ) -> dict:
+        """
+        Generate a privacy certificate with ZK proofs.
+        
+        Args:
+            report: The privacy report
+            zk_proofs: Generated ZK proofs
+        
+        Returns:
+            Privacy certificate with cryptographic guarantees
+        """
+        # Count valid proofs
+        all_proofs = []
+        for proof_list in zk_proofs.values():
+            all_proofs.extend(proof_list)
+        
+        valid_proofs = sum(1 for p in all_proofs if p.is_valid)
+        
+        certificate = {
+            "certificate_type": "privacy_analysis_with_zk",
+            "timestamp": report.timestamp,
+            "overall_risk_score": report.overall_risk_score,
+            "zk_proofs": {
+                "total_proofs": len(all_proofs),
+                "valid_proofs": valid_proofs,
+                "by_type": {
+                    proof_type: len(proofs)
+                    for proof_type, proofs in zk_proofs.items()
+                },
+            },
+            "cryptographic_guarantees": [
+                f"Anonymity set membership verified for {len(zk_proofs.get('anonymity_proofs', []))} peers",
+                f"Session unlinkability proven for {len(zk_proofs.get('unlinkability_proofs', []))} session pairs",
+                f"Range properties verified for {len(zk_proofs.get('range_proofs', []))} metrics",
+            ],
+            "verification_status": "ALL_PROOFS_VALID" if valid_proofs == len(all_proofs) else "SOME_PROOFS_INVALID",
+            "WARNING": "MOCK PROOFS - NOT CRYPTOGRAPHICALLY SECURE",
+        }
+        
+        return certificate
+    
+    def verify_privacy_certificate(self, certificate: dict) -> bool:
+        """
+        Verify a privacy certificate.
+        
+        Args:
+            certificate: The certificate to verify
+        
+        Returns:
+            True if certificate is valid
+        """
+        # Mock verification
+        return certificate.get("verification_status") == "ALL_PROOFS_VALID"
+
+
+class ZKIntegrationInterface:
+    """
+    High-level interface for ZK integration.
+    
+    This provides a simple API for adding ZK proofs to privacy analysis.
+    """
+    
+    def __init__(self):
+        """Initialize the ZK integration interface."""
+        self.enhancer = ZKPrivacyEnhancer()
+        self.preparator = ZKDataPreparator()
+    
+    def analyze_with_zk_proofs(
+        self,
+        report: PrivacyReport,
+        peer_ids: List[str],
+        session_ids: List[str]
+    ) -> Tuple[PrivacyReport, Dict[str, List[MockZKProof]], dict]:
+        """
+        Perform privacy analysis with ZK proof generation.
+        
+        Args:
+            report: Privacy analysis report
+            peer_ids: List of peer IDs
+            session_ids: List of session IDs
+        
+        Returns:
+            Tuple of (report, zk_proofs, certificate)
+        """
+        # Generate ZK proofs
+        zk_proofs = self.enhancer.enhance_report_with_zk_proofs(
+            report, peer_ids, session_ids
+        )
+        
+        # Generate privacy certificate
+        certificate = self.enhancer.generate_privacy_certificate(
+            report, zk_proofs
+        )
+        
+        return report, zk_proofs, certificate
+    
+    def export_zk_enhanced_report(
+        self,
+        report: PrivacyReport,
+        zk_proofs: Dict[str, List[MockZKProof]],
+        certificate: dict
+    ) -> dict:
+        """
+        Export ZK-enhanced report in JSON format.
+        
+        Args:
+            report: Privacy report
+            zk_proofs: Generated ZK proofs
+            certificate: Privacy certificate
+        
+        Returns:
+            Complete ZK-enhanced report
+        """
+        return {
+            "privacy_report": report.to_dict(),
+            "zk_proofs": {
+                proof_type: [p.to_dict() for p in proofs]
+                for proof_type, proofs in zk_proofs.items()
+            },
+            "privacy_certificate": certificate,
+            "metadata": {
+                "version": "0.1.0",
+                "proof_system": "MOCK (PySnark2 in production)",
+                "WARNING": "MOCK IMPLEMENTATION - NOT PRODUCTION READY",
+            }
+        }
+
