@@ -124,20 +124,50 @@ class PrivacyNotifee(INotifee):
     
     async def connected(self, network: INetwork, conn: INetConn) -> None:
         """Called when a new connection is established."""
-        peer_id = conn.muxed_conn.peer_id
-        multiaddr = conn.muxed_conn.multiaddr
-        
-        # Determine direction based on whether we initiated the connection
-        # In py-libp2p, we can check if the connection was initiated by us
-        direction = "outbound" if hasattr(conn, 'initiator') and conn.initiator else "inbound"
-        
-        self.collector.on_connection_opened(peer_id, multiaddr, direction)
+        try:
+            # Get peer_id from muxed connection
+            peer_id = conn.muxed_conn.peer_id
+            
+            # Get multiaddr from the connection itself (or from raw connection)
+            if hasattr(conn, 'multiaddr') and conn.multiaddr:
+                multiaddr = conn.multiaddr
+            elif hasattr(conn, 'raw_conn') and hasattr(conn.raw_conn, 'multiaddr'):
+                multiaddr = conn.raw_conn.multiaddr
+            else:
+                # Fallback: get from transport addresses
+                addrs = conn.get_transport_addresses() if hasattr(conn, 'get_transport_addresses') else []
+                multiaddr = addrs[0] if addrs else None
+            
+            # Determine direction based on whether we initiated the connection
+            direction = "outbound" if hasattr(conn, 'initiator') and conn.initiator else "inbound"
+            
+            self.collector.on_connection_opened(peer_id, multiaddr, direction)
+            print(f"[PrivacyNotifee] Connected: {peer_id} via {multiaddr}")
+        except Exception as e:
+            print(f"[PrivacyNotifee] Error in connected(): {e}")
+            import traceback
+            traceback.print_exc()
     
     async def disconnected(self, network: INetwork, conn: INetConn) -> None:
         """Called when a connection is closed."""
-        peer_id = conn.muxed_conn.peer_id
-        multiaddr = conn.muxed_conn.multiaddr
-        self.collector.on_connection_closed(peer_id, multiaddr)
+        try:
+            peer_id = conn.muxed_conn.peer_id if hasattr(conn, 'muxed_conn') and conn.muxed_conn else None
+            
+            # Get multiaddr from the connection itself
+            multiaddr = None
+            if hasattr(conn, 'multiaddr') and conn.multiaddr:
+                multiaddr = conn.multiaddr
+            elif hasattr(conn, 'raw_conn') and hasattr(conn.raw_conn, 'multiaddr'):
+                multiaddr = conn.raw_conn.multiaddr
+            elif hasattr(conn, 'get_transport_addresses'):
+                addrs = conn.get_transport_addresses()
+                multiaddr = addrs[0] if addrs else None
+            
+            if peer_id and multiaddr:
+                self.collector.on_connection_closed(peer_id, multiaddr)
+                print(f"[PrivacyNotifee] Disconnected: {peer_id}")
+        except Exception as e:
+            print(f"[PrivacyNotifee] Error in disconnected(): {e}")
     
     async def listen(self, network: INetwork, multiaddr: Multiaddr) -> None:
         """Called when the node starts listening on a new multiaddr."""
