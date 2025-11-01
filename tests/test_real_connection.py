@@ -4,6 +4,7 @@ Run after upgrading to latest py-libp2p from main branch.
 
 UPDATED: Now uses background_trio_service() for proper lifecycle management.
 """
+import pytest
 import trio
 from libp2p import new_host
 from libp2p.peer.peerinfo import info_from_p2p_addr
@@ -15,6 +16,7 @@ from libp2p_privacy_poc.privacy_analyzer import PrivacyAnalyzer
 from libp2p_privacy_poc.report_generator import ReportGenerator
 
 
+@pytest.mark.trio
 async def test_real_connections():
     """Test with latest py-libp2p using background_trio_service."""
     print("\n" + "=" * 70)
