@@ -6,6 +6,7 @@ nodes using REAL py-libp2p connections, showing how privacy leaks can emerge
 from network-wide patterns.
 """
 import trio
+from contextlib import AsyncExitStack
 from libp2p import new_host
 from libp2p.peer.peerinfo import info_from_p2p_addr
 from libp2p.tools.async_service import background_trio_service
@@ -83,169 +84,170 @@ async def main():
         nodes.append(node)
         print(f"   {node.name}: {node.peer_id}")
     
-    # Start all networks
+    # Start all networks using AsyncExitStack (scalable to N nodes!)
     print("\n" + "-" * 70)
     print("2. Starting networks...")
     print("-" * 70)
     
-    # Use background_trio_service for all networks
-    async with background_trio_service(nodes[0].network):
-        async with background_trio_service(nodes[1].network):
-            async with background_trio_service(nodes[2].network):
-                print("   ✓ All networks started")
-                
-                # Start listeners
-                print("\n   Starting listeners...")
-                await nodes[0].start(listen_addrs[0])
-                await nodes[1].start(listen_addrs[1])
-                await nodes[2].start(listen_addrs[2])
-                
-                # Wait for listeners to be ready
-                await trio.sleep(0.5)
-                
-                # Get actual listening addresses
-                print("   ✓ All nodes listening")
-                
-                # Establish star topology: Node-1 is hub
-                print("\n" + "-" * 70)
-                print("3. Establishing star network topology...")
-                print("-" * 70)
-                print("   Node-1 (hub) connects to Node-2 and Node-3")
-                
-                hub = nodes[0]
-                spokes = nodes[1:3]
-                
-                # Connect hub to each spoke
-                for i, spoke in enumerate(spokes):
-                    # Get spoke's listening address
-                    listener_key = list(spoke.network.listeners.keys())[0]
-                    listener = spoke.network.listeners[listener_key]
-                    actual_addr = listener.get_addrs()[0]
-                    full_addr = actual_addr.encapsulate(Multiaddr(f"/p2p/{spoke.peer_id}"))
-                    
-                    print(f"   Connecting Node-1 to {spoke.name}...")
-                    await hub.connect_to(full_addr)
-                    print(f"   ✓ Connected to {spoke.name}")
-                    
-                    # Small delay between connections
-                    await trio.sleep(0.1)
-                
-                # Wait for events to be captured
-                await trio.sleep(1.0)
-                
-                # Check connections
-                print("\n   Network topology established:")
-                for node in nodes:
-                    stats = node.collector.get_statistics()
-                    print(f"   {node.name}: {stats['total_connections']} connections, {stats['unique_peers']} peers")
-                
-                # Additional traffic: Hub makes rapid connections (timing leak!)
-                print("\n" + "-" * 70)
-                print("4. Simulating additional traffic patterns...")
-                print("-" * 70)
-                print("   Hub making rapid reconnections (timing leak!)...")
-                
-                # Have hub connect to spoke 2 again (reconnection)
-                listener_key = list(spokes[0].network.listeners.keys())[0]
-                listener = spokes[0].network.listeners[listener_key]
-                actual_addr = listener.get_addrs()[0]
-                full_addr = actual_addr.encapsulate(Multiaddr(f"/p2p/{spokes[0].peer_id}"))
-                
-                # Try to connect again quickly
-                try:
-                    await hub.connect_to(full_addr)
-                    await trio.sleep(0.05)  # Very short interval
-                    print("   ✓ Additional connection attempt made")
-                except Exception as e:
-                    print(f"   Note: Reconnection attempt (expected behavior): {type(e).__name__}")
-                
-                # Wait for all events to be captured
-                await trio.sleep(0.5)
-    
-                # Analyze each node
-                print("\n" + "-" * 70)
-                print("5. Running privacy analysis on each node...")
-                print("-" * 70)
-                
-                results = []
-                for node in nodes:
-                    report, stats = node.analyze()
-                    results.append((node, report, stats))
-                    
-                    # Determine risk level from score
-                    if report.overall_risk_score >= 0.7:
-                        risk_level = "CRITICAL"
-                    elif report.overall_risk_score >= 0.5:
-                        risk_level = "HIGH"
-                    elif report.overall_risk_score >= 0.3:
-                        risk_level = "MEDIUM"
-                    else:
-                        risk_level = "LOW"
-                    
-                    print(f"\n   {node.name} Analysis:")
-                    print(f"   {'─' * 60}")
-                    print(f"     Connections: {stats['total_connections']}")
-                    print(f"     Unique Peers: {stats['unique_peers']}")
-                    print(f"     Protocols: {stats['protocols_used']}")
-                    print(f"     Risk Score: {report.overall_risk_score:.2f}/1.00")
-                    print(f"     Risk Level: {risk_level}")
-                    print(f"     Risks Detected: {len(report.risks)}")
-                    
-                    if report.risks:
-                        print(f"     Top Risks:")
-                        for risk in report.risks[:3]:
-                            print(f"       • {risk.severity}: {risk.risk_type}")
-    
-                # Comparative analysis
-                print("\n" + "-" * 70)
-                print("6. Comparative Analysis")
-                print("-" * 70)
-                
-                # Find highest risk node
-                if results:
-                    highest_risk_node = max(results, key=lambda x: x[1].overall_risk_score)
-                    lowest_risk_node = min(results, key=lambda x: x[1].overall_risk_score)
-                    
-                    print(f"\n   🔴 Highest Risk: {highest_risk_node[0].name}")
-                    print(f"      Score: {highest_risk_node[1].overall_risk_score:.2f}")
-                    print(f"      Reason: Hub node with more connections")
-                    
-                    print(f"\n   🟢 Lowest Risk: {lowest_risk_node[0].name}")
-                    print(f"      Score: {lowest_risk_node[1].overall_risk_score:.2f}")
-                    print(f"      Reason: Spoke node with fewer connections")
-                    
-                    # Network-wide statistics
-                    print("\n   📊 Network-Wide Statistics:")
-                    total_connections = sum(stats['total_connections'] for _, _, stats in results)
-                    avg_risk = sum(report.overall_risk_score for _, report, _ in results) / len(results)
-                    total_risks = sum(len(report.risks) for _, report, _ in results)
-                    
-                    print(f"      Total Connections (from all perspectives): {total_connections}")
-                    print(f"      Average Risk Score: {avg_risk:.2f}")
-                    print(f"      Total Privacy Risks Detected: {total_risks}")
-                    
-                    # Generate detailed report for hub node
-                    print("\n" + "-" * 70)
-                    print("7. Generating detailed report for hub node...")
-                    print("-" * 70)
-                    
-                    hub_report = highest_risk_node[1]
-                    report_gen = ReportGenerator()
-                    
-                    # Generate console report
-                    console_report = report_gen.generate_console_report(
-                        report=hub_report,
-                        verbose=True
-                    )
-                    
-                    print("\n" + console_report)
-    
-                # Key insights
-                print("\n" + "=" * 70)
-                print("KEY INSIGHTS FROM REAL NETWORK ANALYSIS")
-                print("=" * 70)
-                
-                print("""
+    # Use AsyncExitStack to manage dynamic number of background services
+    async with AsyncExitStack() as stack:
+        # Start all network services dynamically
+        for node in nodes:
+            await stack.enter_async_context(background_trio_service(node.network))
+        
+        print("   ✓ All networks started")
+        
+        # Start listeners
+        print("\n   Starting listeners...")
+        for i, node in enumerate(nodes):
+            await node.start(listen_addrs[i])
+        
+        # Wait for listeners to be ready
+        await trio.sleep(0.5)
+        
+        # Get actual listening addresses
+        print("   ✓ All nodes listening")
+        
+        # Establish star topology: Node-1 is hub
+        print("\n" + "-" * 70)
+        print("3. Establishing star network topology...")
+        print("-" * 70)
+        print("   Node-1 (hub) connects to Node-2 and Node-3")
+        
+        hub = nodes[0]
+        spokes = nodes[1:3]
+        
+        # Connect hub to each spoke
+        for i, spoke in enumerate(spokes):
+            # Get spoke's listening address
+            listener_key = list(spoke.network.listeners.keys())[0]
+            listener = spoke.network.listeners[listener_key]
+            actual_addr = listener.get_addrs()[0]
+            full_addr = actual_addr.encapsulate(Multiaddr(f"/p2p/{spoke.peer_id}"))
+            
+            print(f"   Connecting Node-1 to {spoke.name}...")
+            await hub.connect_to(full_addr)
+            print(f"   ✓ Connected to {spoke.name}")
+            
+            # Small delay between connections
+            await trio.sleep(0.1)
+        
+        # Wait for events to be captured
+        await trio.sleep(1.0)
+        
+        # Check connections
+        print("\n   Network topology established:")
+        for node in nodes:
+            stats = node.collector.get_statistics()
+            print(f"   {node.name}: {stats['total_connections']} connections, {stats['unique_peers']} peers")
+        
+        # Additional traffic: Hub makes rapid connections (timing leak!)
+        print("\n" + "-" * 70)
+        print("4. Simulating additional traffic patterns...")
+        print("-" * 70)
+        print("   Hub making rapid reconnections (timing leak!)...")
+        
+        # Have hub connect to spoke 2 again (reconnection)
+        listener_key = list(spokes[0].network.listeners.keys())[0]
+        listener = spokes[0].network.listeners[listener_key]
+        actual_addr = listener.get_addrs()[0]
+        full_addr = actual_addr.encapsulate(Multiaddr(f"/p2p/{spokes[0].peer_id}"))
+        
+        # Try to connect again quickly
+        try:
+            await hub.connect_to(full_addr)
+            await trio.sleep(0.05)  # Very short interval
+            print("   ✓ Additional connection attempt made")
+        except Exception as e:
+            print(f"   Note: Reconnection attempt (expected behavior): {type(e).__name__}")
+        
+        # Wait for all events to be captured
+        await trio.sleep(0.5)
+        
+        # Analyze each node
+        print("\n" + "-" * 70)
+        print("5. Running privacy analysis on each node...")
+        print("-" * 70)
+        
+        results = []
+        for node in nodes:
+            report, stats = node.analyze()
+            results.append((node, report, stats))
+            
+            # Determine risk level from score
+            if report.overall_risk_score >= 0.7:
+                risk_level = "CRITICAL"
+            elif report.overall_risk_score >= 0.5:
+                risk_level = "HIGH"
+            elif report.overall_risk_score >= 0.3:
+                risk_level = "MEDIUM"
+            else:
+                risk_level = "LOW"
+            
+            print(f"\n   {node.name} Analysis:")
+            print(f"   {'─' * 60}")
+            print(f"     Connections: {stats['total_connections']}")
+            print(f"     Unique Peers: {stats['unique_peers']}")
+            print(f"     Protocols: {stats['protocols_used']}")
+            print(f"     Risk Score: {report.overall_risk_score:.2f}/1.00")
+            print(f"     Risk Level: {risk_level}")
+            print(f"     Risks Detected: {len(report.risks)}")
+            
+            if report.risks:
+                print(f"     Top Risks:")
+                for risk in report.risks[:3]:
+                    print(f"       • {risk.severity}: {risk.risk_type}")
+        
+        # Comparative analysis
+        print("\n" + "-" * 70)
+        print("6. Comparative Analysis")
+        print("-" * 70)
+        
+        # Find highest risk node
+        if results:
+            highest_risk_node = max(results, key=lambda x: x[1].overall_risk_score)
+            lowest_risk_node = min(results, key=lambda x: x[1].overall_risk_score)
+            
+            print(f"\n   🔴 Highest Risk: {highest_risk_node[0].name}")
+            print(f"      Score: {highest_risk_node[1].overall_risk_score:.2f}")
+            print(f"      Reason: Hub node with more connections")
+            
+            print(f"\n   🟢 Lowest Risk: {lowest_risk_node[0].name}")
+            print(f"      Score: {lowest_risk_node[1].overall_risk_score:.2f}")
+            print(f"      Reason: Spoke node with fewer connections")
+            
+            # Network-wide statistics
+            print("\n   📊 Network-Wide Statistics:")
+            total_connections = sum(stats['total_connections'] for _, _, stats in results)
+            avg_risk = sum(report.overall_risk_score for _, report, _ in results) / len(results)
+            total_risks = sum(len(report.risks) for _, report, _ in results)
+            
+            print(f"      Total Connections (from all perspectives): {total_connections}")
+            print(f"      Average Risk Score: {avg_risk:.2f}")
+            print(f"      Total Privacy Risks Detected: {total_risks}")
+            
+            # Generate detailed report for hub node
+            print("\n" + "-" * 70)
+            print("7. Generating detailed report for hub node...")
+            print("-" * 70)
+            
+            hub_report = highest_risk_node[1]
+            report_gen = ReportGenerator()
+            
+            # Generate console report
+            console_report = report_gen.generate_console_report(
+                report=hub_report,
+                verbose=True
+            )
+            
+            print("\n" + console_report)
+        
+        # Key insights
+        print("\n" + "=" * 70)
+        print("KEY INSIGHTS FROM REAL NETWORK ANALYSIS")
+        print("=" * 70)
+        
+        print("""
 1. **Real Connection Validation**: Successfully established real py-libp2p connections
    - Events automatically captured via INotifee
    - No manual event simulation required
@@ -273,22 +275,22 @@ async def main():
    - Monitor privacy metrics continuously
    - Use real connection data for accurate risk assessment
     """)
-                
-                print("\n" + "=" * 70)
-                print("✓ SCENARIO COMPLETE - REAL NETWORK VALIDATED")
-                print("=" * 70)
-                print("\nKey Achievement:")
-                print("- Real 3-node star network with py-libp2p")
-                print("- Automatic event capture on all nodes")
-                print("- Comparative privacy analysis across nodes")
-                print("- Ready for production multi-node scenarios!")
-                
-                # Cleanup (with timeout protection)
-                print("\n8. Cleaning up...")
-                with trio.fail_after(CLOSE_TIMEOUT):
-                    for node in nodes:
-                        await node.host.close()
-                print("   ✓ All hosts closed")
+        
+        print("\n" + "=" * 70)
+        print("✓ SCENARIO COMPLETE - REAL NETWORK VALIDATED")
+        print("=" * 70)
+        print("\nKey Achievement:")
+        print("- Real 3-node star network with py-libp2p")
+        print("- Automatic event capture on all nodes")
+        print("- Comparative privacy analysis across nodes")
+        print("- Ready for production multi-node scenarios!")
+        
+        # Cleanup (with timeout protection)
+        print("\n8. Cleaning up...")
+        with trio.fail_after(CLOSE_TIMEOUT):
+            for node in nodes:
+                await node.host.close()
+        print("   ✓ All hosts closed")
 
 
 if __name__ == "__main__":
