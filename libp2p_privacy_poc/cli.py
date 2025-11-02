@@ -54,54 +54,177 @@ def main():
     help='Include mock ZK proofs in the report'
 )
 @click.option(
+    '--duration',
+    type=int,
+    default=10,
+    help='Analysis duration in seconds (default: 10)'
+)
+@click.option(
+    '--listen-addr',
+    type=str,
+    default='/ip4/127.0.0.1/tcp/0',
+    help='Listen address for the node (default: /ip4/127.0.0.1/tcp/0)'
+)
+@click.option(
+    '--connect-to',
+    type=str,
+    help='Peer multiaddr to connect to (optional)'
+)
+@click.option(
     '--simulate',
     is_flag=True,
-    default=True,
-    help='Use simulated data for demonstration (default: True)'
+    default=False,
+    help='Use simulated data instead of real network (default: False)'
 )
 @click.option(
     '--verbose',
     is_flag=True,
     help='Enable verbose output'
 )
-def analyze(format, output, with_zk_proofs, simulate, verbose):
+def analyze(format, output, with_zk_proofs, duration, listen_addr, connect_to, simulate, verbose):
     """
     Run privacy analysis on libp2p node.
     
-    By default, uses simulated data for demonstration purposes.
-    In production, this would connect to real py-libp2p nodes.
+    By default, uses REAL py-libp2p connections. Use --simulate for fast testing.
     
     Examples:
     
-        # Basic console analysis
+        # Basic real network analysis (10 seconds)
         libp2p-privacy analyze
+        
+        # Analyze for 30 seconds
+        libp2p-privacy analyze --duration 30
+        
+        # Connect to specific peer
+        libp2p-privacy analyze --connect-to /ip4/127.0.0.1/tcp/4001/p2p/QmPeerID...
         
         # Generate JSON report
         libp2p-privacy analyze --format json --output report.json
         
-        # Generate HTML report with ZK proofs
-        libp2p-privacy analyze --format html --with-zk-proofs --output report.html
+        # Fast simulation (for CI/testing)
+        libp2p-privacy analyze --simulate
     """
-    try:
+    import trio
+    
+    async def _analyze_real_network():
+        """Run analysis on real py-libp2p network."""
+        from libp2p import new_host
+        from libp2p.peer.peerinfo import info_from_p2p_addr
+        from libp2p.tools.async_service import background_trio_service
+        from libp2p_privacy_poc.utils import get_peer_listening_address
+        
         click.echo("\n" + "=" * 70)
         click.echo(click.style("libp2p Privacy Analysis Tool", fg="cyan", bold=True))
         click.echo("=" * 70)
+        click.echo(click.style("\n✓ Using REAL py-libp2p network", fg="green"))
         
-        if simulate:
-            click.echo(click.style("\n⚠️  Using simulated data for demonstration", fg="yellow"))
-            click.echo("In production, this would connect to real py-libp2p nodes\n")
+        # Create host
+        if verbose:
+            click.echo(f"\nCreating host...")
+        host = new_host()
+        click.echo(f"Host ID: {host.get_id()}")
         
-        # Create collector with simulated data
+        # Create collector
+        collector = MetadataCollector(host)
+        if verbose:
+            click.echo("✓ MetadataCollector attached (auto-capturing events)")
+        
+        # Start network
+        if verbose:
+            click.echo(f"\nStarting network on {listen_addr}...")
+        
+        network = host.get_network()
+        
+        async with background_trio_service(network):
+            # Start listener with timeout
+            try:
+                with trio.fail_after(5):
+                    await network.listen(Multiaddr(listen_addr))
+            except trio.TooSlowError:
+                click.echo(click.style("✗ Timeout starting listener", fg="red"), err=True)
+                return None, None
+            
+            await trio.sleep(0.5)
+            
+            # Get actual listening address
+            try:
+                actual_addr = get_peer_listening_address(host)
+                click.echo(f"✓ Listening on: {actual_addr}")
+            except ValueError as e:
+                click.echo(click.style(f"✗ {e}", fg="red"), err=True)
+                return None, None
+            
+            # Connect to peer if specified
+            if connect_to:
+                if verbose:
+                    click.echo(f"\nConnecting to peer: {connect_to}")
+                try:
+                    peer_info = info_from_p2p_addr(Multiaddr(connect_to))
+                    with trio.fail_after(10):
+                        await host.connect(peer_info)
+                    click.echo(click.style("✓ Connected successfully", fg="green"))
+                except Exception as e:
+                    click.echo(click.style(f"⚠️  Connection failed: {e}", fg="yellow"))
+                    click.echo("Continuing with analysis of local activity...")
+            
+            # Capture events for specified duration
+            click.echo(f"\nCapturing network events for {duration} seconds...")
+            if verbose:
+                # Show progress
+                for i in range(duration):
+                    stats = collector.get_statistics()
+                    click.echo(f"  {i+1}s: {stats['total_connections']} connections, {stats['unique_peers']} peers", nl=False)
+                    click.echo("\r", nl=False)
+                    await trio.sleep(1)
+                click.echo()  # New line
+            else:
+                await trio.sleep(duration)
+            
+            # Get final statistics
+            stats = collector.get_statistics()
+            click.echo(f"\n{click.style('✓ Capture Complete!', fg='green')}")
+            click.echo(f"  Connections: {stats['total_connections']}")
+            click.echo(f"  Unique Peers: {stats['unique_peers']}")
+            click.echo(f"  Protocols: {stats['protocols_used']}")
+            
+            # Cleanup
+            if verbose:
+                click.echo("\nClosing network...")
+            with trio.fail_after(5):
+                await host.close()
+            
+            return collector, stats
+    
+    def _analyze_simulated():
+        """Run analysis with simulated data."""
+        click.echo("\n" + "=" * 70)
+        click.echo(click.style("libp2p Privacy Analysis Tool", fg="cyan", bold=True))
+        click.echo("=" * 70)
+        click.echo(click.style("\n⚠️  Using simulated data for demonstration", fg="yellow"))
+        
         if verbose:
             click.echo("Creating MetadataCollector...")
         collector = MetadataCollector(libp2p_host=None)
         
-        # Simulate network activity
         if verbose:
             click.echo("Simulating network activity...")
         _simulate_network_activity(collector, verbose)
         
-        # Run analysis
+        stats = collector.get_statistics()
+        return collector, stats
+    
+    try:
+        # Run analysis (real or simulated)
+        if simulate:
+            collector, stats = _analyze_simulated()
+        else:
+            collector, stats = trio.run(_analyze_real_network)
+            
+        if collector is None:
+            click.echo(click.style("\n✗ Analysis failed", fg="red"), err=True)
+            sys.exit(1)
+        
+        # Run privacy analysis
         if verbose:
             click.echo("\nRunning privacy analysis...")
         analyzer = PrivacyAnalyzer(collector)
@@ -157,47 +280,60 @@ def analyze(format, output, with_zk_proofs, simulate, verbose):
 
 @main.command()
 @click.option(
-    '--scenario',
-    type=click.Choice(['all', 'timing', 'linkability', 'anonymity'], case_sensitive=False),
-    default='all',
-    help='Which demonstration scenario to run'
-)
-@click.option(
     '--verbose',
     is_flag=True,
     help='Enable verbose output'
 )
-def demo(scenario, verbose):
+def demo(verbose):
     """
-    Run demonstration scenarios showing privacy analysis capabilities.
+    Run demonstration scenarios showing privacy analysis capabilities with REAL connections.
     
-    Demonstrates various privacy leak detection techniques and ZK proof concepts.
+    Runs all 5 demo scenarios from examples/demo_scenarios.py using real py-libp2p networks.
+    Demonstrates timing correlation, anonymity sets, protocol fingerprinting, and ZK proofs.
     
     Examples:
     
-        # Run all demonstrations
+        # Run all demonstrations with real networks
         libp2p-privacy demo
         
-        # Run timing correlation demo
-        libp2p-privacy demo --scenario timing
+        # Run with verbose output
+        libp2p-privacy demo --verbose
+    
+    Note: This command runs the full demo_scenarios.py script which may take 1-2 minutes.
     """
+    import trio
+    import subprocess
+    
     try:
         click.echo("\n" + "=" * 70)
         click.echo(click.style("Privacy Analysis Demonstrations", fg="cyan", bold=True))
         click.echo("=" * 70)
+        click.echo(click.style("\n✓ Running REAL network demonstrations", fg="green"))
+        click.echo("This will run all 5 scenarios with real py-libp2p connections.\n")
         
-        if scenario in ['all', 'timing']:
-            _demo_timing_correlation(verbose)
+        # Run the demo_scenarios.py script
+        import os
+        examples_dir = os.path.join(os.path.dirname(__file__), '..', 'examples')
+        demo_script = os.path.join(examples_dir, 'demo_scenarios.py')
         
-        if scenario in ['all', 'linkability']:
-            _demo_peer_linkability(verbose)
+        if not os.path.exists(demo_script):
+            click.echo(click.style(f"✗ Demo script not found: {demo_script}", fg="red"), err=True)
+            sys.exit(1)
         
-        if scenario in ['all', 'anonymity']:
-            _demo_anonymity_set(verbose)
+        # Run the script
+        result = subprocess.run(
+            [sys.executable, demo_script],
+            cwd=os.path.dirname(demo_script),
+            capture_output=False if verbose else True
+        )
         
-        click.echo("\n" + "=" * 70)
-        click.echo(click.style("✓ Demonstrations Complete!", fg="green"))
-        click.echo("=" * 70 + "\n")
+        if result.returncode == 0:
+            click.echo("\n" + "=" * 70)
+            click.echo(click.style("✓ All Demonstrations Complete!", fg="green"))
+            click.echo("=" * 70 + "\n")
+        else:
+            click.echo(click.style(f"\n✗ Demo failed with exit code {result.returncode}", fg="red"), err=True)
+            sys.exit(result.returncode)
         
     except Exception as e:
         click.echo(click.style(f"\n✗ Error: {e}", fg="red"), err=True)

@@ -6,6 +6,37 @@ import json
 import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+from multiaddr import Multiaddr
+
+
+def get_peer_listening_address(host) -> Multiaddr:
+    """
+    Get the full listening address of a host including peer ID.
+    
+    This is a common pattern when connecting to py-libp2p hosts.
+    
+    Args:
+        host: libp2p Host object with active network
+        
+    Returns:
+        Multiaddr: Full address with /p2p/<peer-id> suffix
+        
+    Raises:
+        ValueError: If host has no active listeners
+        
+    Example:
+        >>> full_addr = get_peer_listening_address(host2)
+        >>> await host1.connect(info_from_p2p_addr(full_addr))
+    """
+    network = host.get_network()
+    if not network.listeners:
+        raise ValueError(f"Host {host.get_id()} has no active listeners")
+    
+    listener_key = list(network.listeners.keys())[0]
+    listener = network.listeners[listener_key]
+    actual_addr = listener.get_addrs()[0]
+    return actual_addr.encapsulate(Multiaddr(f"/p2p/{host.get_id()}"))
+
 
 
 def format_timestamp(timestamp: float) -> str:
