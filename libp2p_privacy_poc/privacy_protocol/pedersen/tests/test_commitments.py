@@ -732,6 +732,7 @@ class TestSecurityProperties:
 # ============================================================================
 
 
+@pytest.mark.benchmark
 class TestPerformance:
     """Test performance of commitment operations."""
 
@@ -885,4 +886,3 @@ RECOMMENDED NEXT STEPS:
 4. Benchmark on production hardware
 5. Get formal crypto review
 """
-

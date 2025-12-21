@@ -73,6 +73,7 @@ class TestHashFunctions:
         """Test all proof types have domain separators."""
         required_types = [
             "anonymity_set_membership",
+            "commitment_opening_pok",
             "session_unlinkability",
             "range_proof",
             "timing_independence",

@@ -126,6 +126,7 @@ class TestZKProofType:
     def test_enum_values(self):
         """Test that all required enum values exist."""
         assert ZKProofType.ANONYMITY_SET_MEMBERSHIP.value == "anonymity_set_membership"
+        assert ZKProofType.COMMITMENT_OPENING_POK.value == "commitment_opening_pok"
         assert ZKProofType.SESSION_UNLINKABILITY.value == "session_unlinkability"
         assert ZKProofType.RANGE_PROOF.value == "range_proof"
         assert ZKProofType.TIMING_INDEPENDENCE.value == "timing_independence"
@@ -133,6 +134,7 @@ class TestZKProofType:
     def test_enum_membership(self):
         """Test enum membership checks."""
         assert ZKProofType.ANONYMITY_SET_MEMBERSHIP in ZKProofType
+        assert ZKProofType.COMMITMENT_OPENING_POK in ZKProofType
         assert ZKProofType.SESSION_UNLINKABILITY in ZKProofType
         assert ZKProofType.RANGE_PROOF in ZKProofType
         assert ZKProofType.TIMING_INDEPENDENCE in ZKProofType
@@ -140,8 +142,9 @@ class TestZKProofType:
     def test_enum_iteration(self):
         """Test iterating over enum values."""
         values = [pt.value for pt in ZKProofType]
-        
+
         assert "anonymity_set_membership" in values
+        assert "commitment_opening_pok" in values
         assert "session_unlinkability" in values
         assert "range_proof" in values
         assert "timing_independence" in values
@@ -627,4 +630,3 @@ class TestPerformance:
         # Should be very fast (< 1ms per deserialization)
         assert avg_time_ms < 1.0
         print(f"Deserialization: {avg_time_ms:.3f}ms per operation")
-

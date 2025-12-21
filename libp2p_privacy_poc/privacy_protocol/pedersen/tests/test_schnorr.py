@@ -800,12 +800,12 @@ def test_completeness_property(params, simple_context):
 
 
 def test_soundness_property_fake_value(params, simple_context):
-    """Test soundness: malicious prover with fake value fails."""
+    """Test soundness: tampered proof fails verification for fake value."""
     # Honest commitment
     true_value = 42
     commitment, blinding = commit(true_value, params=params)
     
-    # Malicious prover tries to prove knowledge of different value
+    # Tampered proof fails verification when using a different value
     fake_value = 999
     
     # Generate proof with fake value
@@ -829,12 +829,12 @@ def test_soundness_property_fake_value(params, simple_context):
 
 
 def test_soundness_property_fake_blinding(params, simple_context):
-    """Test soundness: malicious prover with fake blinding fails."""
+    """Test soundness: tampered proof fails verification for fake blinding."""
     # Honest commitment
     value = 42
     commitment, true_blinding = commit(value, params=params)
     
-    # Malicious prover tries to prove knowledge of different blinding
+    # Tampered proof fails verification when using a different blinding
     fake_blinding = true_blinding + 123
     
     # Generate proof with fake blinding
@@ -1067,6 +1067,7 @@ def test_announcement_verification(params, simple_context, commitment_with_witne
 # ============================================================================
 
 
+@pytest.mark.benchmark
 def test_single_proof_generation_benchmark(benchmark, params, simple_context):
     """Benchmark single proof generation (target: 10-20ms)."""
     value = 42
@@ -1085,6 +1086,7 @@ def test_single_proof_generation_benchmark(benchmark, params, simple_context):
     assert 'c' in result
 
 
+@pytest.mark.benchmark
 def test_single_proof_verification_benchmark(benchmark, params, simple_context):
     """Benchmark single proof verification (target: 10-20ms)."""
     value = 42
@@ -1109,6 +1111,7 @@ def test_single_proof_verification_benchmark(benchmark, params, simple_context):
     assert result is True
 
 
+@pytest.mark.benchmark
 def test_bulk_generation_benchmark(params, simple_context):
     """Benchmark bulk proof generation (1000 proofs, target: 10-20 seconds)."""
     num_proofs = 1000
@@ -1138,6 +1141,7 @@ def test_bulk_generation_benchmark(params, simple_context):
     assert elapsed < 30.0, f"Bulk generation too slow: {elapsed:.2f}s"
 
 
+@pytest.mark.benchmark
 def test_bulk_verification_benchmark(params, simple_context):
     """Benchmark bulk proof verification (1000 proofs, target: 10-20 seconds)."""
     num_proofs = 1000
@@ -1329,4 +1333,3 @@ def test_homomorphic_proof_chain(params, simple_context):
     
     # Also verify the sum commitment directly
     assert verify_commitment(commitment_sum, value_sum, blinding_sum, params)
-

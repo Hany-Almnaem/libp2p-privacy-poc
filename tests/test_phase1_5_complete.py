@@ -15,6 +15,7 @@ import pytest
 import trio
 import subprocess
 import sys
+import shutil
 from pathlib import Path
 
 from libp2p import new_host
@@ -27,6 +28,24 @@ from libp2p_privacy_poc.privacy_analyzer import PrivacyAnalyzer
 from libp2p_privacy_poc.report_generator import ReportGenerator
 from libp2p_privacy_poc.mock_zk_proofs import MockZKProofSystem
 from libp2p_privacy_poc.utils import get_peer_listening_address
+
+
+def _cli_command():
+    cli_path = shutil.which("libp2p-privacy")
+    if cli_path:
+        return [cli_path]
+    return [sys.executable, "-m", "libp2p_privacy_poc.cli"]
+
+
+async def _wait_for_listen_addr(network, timeout: float = 5.0):
+    with trio.fail_after(timeout):
+        while True:
+            if network.listeners:
+                listener = next(iter(network.listeners.values()))
+                addrs = listener.get_addrs()
+                if addrs:
+                    return addrs[0]
+            await trio.sleep(0.05)
 
 
 class TestPhase15CoreFunctionality:
@@ -74,6 +93,8 @@ class TestPhase15CoreFunctionality:
                 
                 # Wait for listeners
                 await trio.sleep(0.5)
+                await _wait_for_listen_addr(host1.get_network())
+                await _wait_for_listen_addr(host2.get_network())
                 
                 # Connect
                 peer_addr = get_peer_listening_address(host2)
@@ -108,6 +129,8 @@ class TestPhase15CoreFunctionality:
                 await host1.get_network().listen(Multiaddr("/ip4/127.0.0.1/tcp/0"))
                 await host2.get_network().listen(Multiaddr("/ip4/127.0.0.1/tcp/0"))
                 await trio.sleep(0.5)
+                await _wait_for_listen_addr(host1.get_network())
+                await _wait_for_listen_addr(host2.get_network())
                 
                 peer_addr = get_peer_listening_address(host2)
                 peer_info = info_from_p2p_addr(peer_addr)
@@ -148,6 +171,8 @@ class TestPhase15CoreFunctionality:
                         await node.get_network().listen(Multiaddr("/ip4/127.0.0.1/tcp/0"))
                     
                     await trio.sleep(0.5)
+                    for node in nodes:
+                        await _wait_for_listen_addr(node.get_network())
                     
                     # Connect in star topology (node 0 is hub)
                     for i in range(1, 3):
@@ -225,6 +250,7 @@ class TestPhase15UtilityFunctions:
         async with background_trio_service(host.get_network()):
             await host.get_network().listen(Multiaddr("/ip4/127.0.0.1/tcp/0"))
             await trio.sleep(0.5)
+            await _wait_for_listen_addr(host.get_network())
             
             # Should get full address including peer ID
             peer_addr = get_peer_listening_address(host)
@@ -300,7 +326,7 @@ class TestPhase15CLIIntegration:
         print("\n[TEST] CLI analyze (basic)...")
         
         result = subprocess.run(
-            ["libp2p-privacy", "analyze", "--simulate", "--duration", "2"],
+            _cli_command() + ["analyze", "--simulate", "--duration", "2"],
             capture_output=True,
             text=True,
             timeout=10
@@ -315,7 +341,7 @@ class TestPhase15CLIIntegration:
         print("\n[TEST] CLI version...")
         
         result = subprocess.run(
-            ["libp2p-privacy", "version"],
+            _cli_command() + ["version"],
             capture_output=True,
             text=True,
             timeout=5
@@ -485,4 +511,3 @@ def run_all_phase15_tests():
 
 if __name__ == "__main__":
     sys.exit(run_all_phase15_tests())
-

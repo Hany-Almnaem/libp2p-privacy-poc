@@ -77,6 +77,8 @@ DOMAIN_SEPARATOR_PREFIX = b"LIBP2P_PRIVACY_V1_"
 # Domain separators for each proof type
 DOMAIN_SEPARATORS = {
     "anonymity_set_membership": DOMAIN_SEPARATOR_PREFIX + b"ANON_SET",
+    "commitment_opening_pok": DOMAIN_SEPARATOR_PREFIX + b"COMMIT_OPEN_POK",
+    "peer_id_scalar": DOMAIN_SEPARATOR_PREFIX + b"PEER_ID_SCALAR",
     "session_unlinkability": DOMAIN_SEPARATOR_PREFIX + b"UNLINK",
     "range_proof": DOMAIN_SEPARATOR_PREFIX + b"RANGE",
     "timing_independence": DOMAIN_SEPARATOR_PREFIX + b"TIMING",

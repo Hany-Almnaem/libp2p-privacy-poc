@@ -24,6 +24,7 @@ from ..interfaces import (
     ProofGenerator,
     ProofVerifier,
     AnonymitySetBackend,
+    CommitmentOpeningBackend,
     RangeProofBackend,
     ZKProofBackend,
     is_proof_backend,
@@ -52,6 +53,11 @@ class TestAbstractClassInstantiation:
         """AnonymitySetBackend is abstract and cannot be instantiated."""
         with pytest.raises(TypeError, match="Can't instantiate abstract class"):
             AnonymitySetBackend()
+
+    def test_cannot_instantiate_commitment_opening_backend(self):
+        """CommitmentOpeningBackend is abstract and cannot be instantiated."""
+        with pytest.raises(TypeError, match="Can't instantiate abstract class"):
+            CommitmentOpeningBackend()
     
     def test_cannot_instantiate_range_proof_backend(self):
         """RangeProofBackend is abstract and cannot be instantiated."""
@@ -116,7 +122,7 @@ class MockProofBackend(ProofBackend):
         witness_str = str(witness).encode('utf-8')
         
         return ZKProof(
-            proof_type=ZKProofType.ANONYMITY_SET_MEMBERSHIP.value,
+            proof_type=ZKProofType.COMMITMENT_OPENING_POK.value,
             commitment=witness_str,
             challenge=b"mock_challenge",
             response=b"mock_response",
@@ -475,7 +481,7 @@ class TestZKProofIntegration:
         )
         
         assert isinstance(proof, ZKProof)
-        assert proof.proof_type == ZKProofType.ANONYMITY_SET_MEMBERSHIP.value
+        assert proof.proof_type == ZKProofType.COMMITMENT_OPENING_POK.value
         assert proof.commitment is not None
     
     def test_backend_verifies_zkproof(self):
@@ -673,6 +679,7 @@ class TestEdgeCases:
 # ============================================================================
 
 
+@pytest.mark.benchmark
 class TestPerformance:
     """Lightweight performance checks."""
     
@@ -757,4 +764,3 @@ RECOMMENDED NEXT STEPS:
 4. Perform formal security review
 5. Benchmark real cryptographic operations
 """
-

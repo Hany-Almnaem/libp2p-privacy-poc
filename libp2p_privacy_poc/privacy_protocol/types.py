@@ -104,12 +104,14 @@ class ZKProofType(Enum):
     Each proof type has specific security properties and use cases:
     
     - ANONYMITY_SET_MEMBERSHIP: Prove peer belongs to set without revealing identity
+    - COMMITMENT_OPENING_POK: Prove knowledge of a commitment opening
     - SESSION_UNLINKABILITY: Prove sessions are unlinkable across time
     - RANGE_PROOF: Prove value is within range without revealing exact value
     - TIMING_INDEPENDENCE: Prove timing properties without revealing exact timestamps
     """
     
     ANONYMITY_SET_MEMBERSHIP = "anonymity_set_membership"
+    COMMITMENT_OPENING_POK = "commitment_opening_pok"
     SESSION_UNLINKABILITY = "session_unlinkability"
     RANGE_PROOF = "range_proof"
     TIMING_INDEPENDENCE = "timing_independence"
@@ -415,4 +417,3 @@ class ZKProof:
             bool: True if proof has valid structure
         """
         return self.verification_result
-

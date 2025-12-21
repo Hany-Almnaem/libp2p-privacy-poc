@@ -16,6 +16,17 @@ from libp2p_privacy_poc.privacy_analyzer import PrivacyAnalyzer
 from libp2p_privacy_poc.report_generator import ReportGenerator
 
 
+async def _wait_for_listen_addr(network, timeout: float = 5.0):
+    with trio.fail_after(timeout):
+        while True:
+            if network.listeners:
+                listener = next(iter(network.listeners.values()))
+                addrs = listener.get_addrs()
+                if addrs:
+                    return addrs[0]
+            await trio.sleep(0.05)
+
+
 @pytest.mark.trio
 async def test_connection_failure_handling():
     """
@@ -101,9 +112,7 @@ async def test_reconnection_tracking():
             await trio.sleep(0.5)
             
             # Get host2's address
-            listener_key = list(host2.get_network().listeners.keys())[0]
-            listener = host2.get_network().listeners[listener_key]
-            actual_addr = listener.get_addrs()[0]
+            actual_addr = await _wait_for_listen_addr(host2.get_network())
             full_addr = actual_addr.encapsulate(Multiaddr(f"/p2p/{host2.get_id()}"))
             
             # First connection
@@ -172,9 +181,9 @@ async def test_rapid_connections_disconnections():
                     # Make rapid connections
                     print("\n2. Making rapid connections...")
                     for peer in peer_hosts:
-                        listener_key = list(peer.get_network().listeners.keys())[0]
-                        listener = peer.get_network().listeners[listener_key]
-                        actual_addr = listener.get_addrs()[0]
+                        actual_addr = await _wait_for_listen_addr(
+                            peer.get_network()
+                        )
                         full_addr = actual_addr.encapsulate(Multiaddr(f"/p2p/{peer.get_id()}"))
                         
                         await main_host.connect(info_from_p2p_addr(full_addr))
@@ -296,9 +305,7 @@ async def test_connection_metadata_accuracy():
             await trio.sleep(0.5)
             
             # Get host2's address
-            listener_key = list(host2.get_network().listeners.keys())[0]
-            listener = host2.get_network().listeners[listener_key]
-            actual_addr = listener.get_addrs()[0]
+            actual_addr = await _wait_for_listen_addr(host2.get_network())
             full_addr = actual_addr.encapsulate(Multiaddr(f"/p2p/{host2.get_id()}"))
             
             # Record start time
@@ -386,4 +393,3 @@ if __name__ == "__main__":
         print("=" * 70)
     
     trio.run(run_all)
-

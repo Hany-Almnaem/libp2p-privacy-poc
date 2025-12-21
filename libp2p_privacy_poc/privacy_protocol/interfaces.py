@@ -22,6 +22,7 @@ Interfaces:
 - ProofGenerator: Protocol for proof generation
 - ProofVerifier: Protocol for proof verification
 - AnonymitySetBackend: Interface for anonymity set proofs
+- CommitmentOpeningBackend: Interface for commitment opening PoK proofs
 - RangeProofBackend: Interface for range proofs
 - ZKProofBackend: Composed interface for full ZK systems
 """
@@ -430,6 +431,32 @@ class AnonymitySetBackend(ProofBackend):
         Raises:
             ValueError: If members list is invalid
             CryptographicError: If setup fails
+        """
+        pass
+
+
+class CommitmentOpeningBackend(ProofBackend):
+    """
+    Backend for commitment opening proofs of knowledge.
+
+    ⚠️ REQUIRES CRYPTO REVIEW
+
+    Proves knowledge of a commitment opening (value, blinding)
+    without revealing the witness.
+    """
+
+    @abstractmethod
+    def generate_commitment_opening_proof(
+        self, ctx: ProofContext
+    ) -> ZKProof:
+        """
+        Generate a proof of knowledge for a commitment opening.
+
+        Args:
+            ctx: Proof context (must include session_id for binding)
+
+        Returns:
+            ZKProof: Commitment opening proof
         """
         pass
 

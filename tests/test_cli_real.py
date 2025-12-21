@@ -8,13 +8,16 @@ import subprocess
 import sys
 import os
 import json
+import shutil
 from pathlib import Path
 
 
 def get_cli_command():
     """Get the CLI command to run."""
-    # Try to use the installed CLI command first
-    return "libp2p-privacy"
+    cli_path = shutil.which("libp2p-privacy")
+    if cli_path:
+        return [cli_path]
+    return [sys.executable, "-m", "libp2p_privacy_poc.cli"]
 
 
 def run_cli(*args, timeout=30, check=True):
@@ -29,7 +32,7 @@ def run_cli(*args, timeout=30, check=True):
     Returns:
         subprocess.CompletedProcess
     """
-    cmd = [get_cli_command()] + list(args)
+    cmd = get_cli_command() + list(args)
     return subprocess.run(
         cmd,
         capture_output=True,
@@ -399,4 +402,3 @@ if __name__ == "__main__":
     # Cleanup
     import shutil
     shutil.rmtree(tmp_dir)
-

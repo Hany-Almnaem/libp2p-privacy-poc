@@ -16,6 +16,17 @@ from libp2p_privacy_poc.privacy_analyzer import PrivacyAnalyzer
 from libp2p_privacy_poc.report_generator import ReportGenerator
 
 
+async def _wait_for_listen_addr(network, timeout: float = 5.0):
+    with trio.fail_after(timeout):
+        while True:
+            if network.listeners:
+                listener = next(iter(network.listeners.values()))
+                addrs = listener.get_addrs()
+                if addrs:
+                    return addrs[0]
+            await trio.sleep(0.05)
+
+
 @pytest.mark.trio
 async def test_real_connections():
     """Test with latest py-libp2p using background_trio_service."""
@@ -62,10 +73,8 @@ async def test_real_connections():
             if len(network1.listeners) > 0:
                 print("   ✅ SUCCESS! Listeners started!")
                 
-                # Get actual address (listeners is a dict, not a list)
-                listener_key = list(network1.listeners.keys())[0]
-                listener = network1.listeners[listener_key]
-                actual_addr = listener.get_addrs()[0]
+                # Get actual address (wait until listener exposes addrs)
+                actual_addr = await _wait_for_listen_addr(network1)
                 full_addr = actual_addr.encapsulate(Multiaddr(f"/p2p/{host1.get_id()}"))
                 print(f"   Host1 listening on: {actual_addr}")
                 
@@ -139,4 +148,3 @@ if __name__ == "__main__":
     print("=" * 70)
     
     trio.run(test_real_connections)
-

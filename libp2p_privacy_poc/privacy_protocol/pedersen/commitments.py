@@ -122,6 +122,16 @@ class CurveParameters:
                 "Pedersen commitments require prime order curves only."
             )
 
+    @property
+    def scalar_bytes(self) -> int:
+        """Fixed-size scalar encoding length for this curve."""
+        return (self.order.bit_length() + 7) // 8
+
+    @property
+    def curve_name(self) -> str:
+        """Alias for the configured curve name."""
+        return self.curve
+
 
 def setup_curve(
     curve_name: Optional[str] = None, library: Optional[str] = None
