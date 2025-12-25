@@ -1,10 +1,17 @@
 """Tests for Merkle tree utilities with deterministic vectors"""
 
 import pytest
-from privacy_protocol.merkle import (
-    hash_leaf, hash_node, build_tree, verify_path,
-    DOMAIN_SEPARATORS_2B
-)
+
+try:
+    from privacy_protocol.merkle import (
+        hash_leaf, hash_node, build_tree, verify_path,
+        DOMAIN_SEPARATORS_2B,
+    )
+except ModuleNotFoundError:
+    from ..merkle import (
+        hash_leaf, hash_node, build_tree, verify_path,
+        DOMAIN_SEPARATORS_2B,
+    )
 
 
 class TestMerkleHashing:

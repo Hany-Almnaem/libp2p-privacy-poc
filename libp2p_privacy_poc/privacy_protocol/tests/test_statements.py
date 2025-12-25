@@ -1,13 +1,25 @@
 """Tests for statement registry and validation"""
 
 import pytest
-from privacy_protocol.statements import (
-    StatementType,
-    StatementSpec,
-    STATEMENT_REGISTRY,
-    validate_public_inputs,
-    get_statement_spec,
-)
+
+try:
+    from privacy_protocol.statements import (
+        StatementType,
+        StatementSpec,
+        STATEMENT_REGISTRY,
+        validate_public_inputs,
+        get_statement_spec,
+    )
+    from privacy_protocol.types import ZKProof, ZKProofType
+except ModuleNotFoundError:
+    from ..statements import (
+        StatementType,
+        StatementSpec,
+        STATEMENT_REGISTRY,
+        validate_public_inputs,
+        get_statement_spec,
+    )
+    from ..types import ZKProof, ZKProofType
 
 
 class TestStatementRegistry:
@@ -112,8 +124,6 @@ class TestZKProofIntegration:
 
     def test_phase2a_proof_not_statement_proof(self):
         """Phase 2A proof returns None for statement type"""
-        from privacy_protocol.types import ZKProof, ZKProofType
-
         proof = ZKProof(
             proof_type=ZKProofType.PEDERSEN_OPENING,
             commitment=b"\x00" * 33,
@@ -127,8 +137,6 @@ class TestZKProofIntegration:
 
     def test_phase2b_proof_has_statement_type(self):
         """Phase 2B proof returns statement type"""
-        from privacy_protocol.types import ZKProof, ZKProofType
-
         proof = ZKProof(
             proof_type=ZKProofType.PEDERSEN_OPENING,
             commitment=b"\x00" * 33,
@@ -150,8 +158,6 @@ class TestZKProofIntegration:
 
     def test_validate_statement_metadata_passes_for_phase2a(self):
         """Validation passes for Phase 2A proofs"""
-        from privacy_protocol.types import ZKProof, ZKProofType
-
         proof = ZKProof(
             proof_type=ZKProofType.PEDERSEN_OPENING,
             commitment=b"\x00" * 33,

@@ -406,15 +406,8 @@ class ZKProof:
         if "t" not in obj or "c" not in obj:
             raise ValueError("Invalid proof format: missing required fields")
         
-        proof_type = obj["t"]
-        if isinstance(proof_type, str):
-            try:
-                proof_type = ZKProofType(proof_type)
-            except ValueError:
-                pass
-
         return cls(
-            proof_type=proof_type,
+            proof_type=obj["t"],
             commitment=obj["c"],
             challenge=obj.get("ch"),
             response=obj.get("r"),

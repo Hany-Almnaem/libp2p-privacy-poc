@@ -11,14 +11,13 @@ import hashlib
 from petlib.ec import EcGroup, EcPt
 from petlib.bn import Bn
 
-from privacy_protocol.types import ZKProof, ZKProofType, ProofContext
-from privacy_protocol.merkle import (
+from ..types import ZKProof, ZKProofType
+from ..merkle import (
     hash_leaf, verify_path, DOMAIN_SEPARATORS_2B
 )
-from privacy_protocol.statements import StatementType
-from privacy_protocol.security import RandomnessSource
-from privacy_protocol.pedersen.backend import DOMAIN_SEPARATORS
-from privacy_protocol.pedersen.commitments import get_cached_curve_params
+from ..statements import StatementType
+from ..security import RandomnessSource
+from .commitments import get_cached_curve_params
 
 # Secp256k1 group (from existing code)
 _params = get_cached_curve_params()

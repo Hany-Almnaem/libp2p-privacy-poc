@@ -7,7 +7,7 @@ import hashlib
 from typing import List, Tuple, Dict, Any
 
 # Import domain separators
-from privacy_protocol.pedersen.backend import DOMAIN_SEPARATORS
+from .pedersen.backend import DOMAIN_SEPARATORS
 
 # Phase 2B domain separators (add to DOMAIN_SEPARATORS dict)
 DOMAIN_SEPARATORS_2B = {

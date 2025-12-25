@@ -2,7 +2,11 @@
 
 import cbor2
 import pytest
-from privacy_protocol.types import ZKProof, ZKProofType
+
+try:
+    from privacy_protocol.types import ZKProof, ZKProofType
+except ModuleNotFoundError:
+    from ..types import ZKProof, ZKProofType
 
 
 def test_phase2b_proof_cbor_roundtrip():
@@ -31,7 +35,12 @@ def test_phase2b_proof_cbor_roundtrip():
     restored_proof = ZKProof.deserialize(serialized)
 
     # Verify all fields match
-    assert restored_proof.proof_type == original_proof.proof_type
+    expected_type = (
+        original_proof.proof_type.value
+        if hasattr(original_proof.proof_type, "value")
+        else original_proof.proof_type
+    )
+    assert restored_proof.proof_type == expected_type
     assert restored_proof.commitment == original_proof.commitment
     assert restored_proof.challenge == original_proof.challenge
     assert restored_proof.response == original_proof.response

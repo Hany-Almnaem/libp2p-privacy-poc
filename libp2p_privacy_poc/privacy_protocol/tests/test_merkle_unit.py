@@ -2,7 +2,10 @@ import hashlib
 
 import pytest
 
-from privacy_protocol import merkle
+try:
+    from privacy_protocol import merkle
+except ModuleNotFoundError:
+    from .. import merkle
 
 
 def _leaf_bytes(value: int) -> bytes:

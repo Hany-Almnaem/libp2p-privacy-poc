@@ -10,8 +10,10 @@ This backend composes:
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 import hashlib
+
+from petlib.bn import Bn
 
 from .commitments import CurveParameters, commit, get_cached_curve_params
 from .schnorr import generate_schnorr_pok, verify_schnorr_pok
@@ -323,6 +325,42 @@ class PedersenBackend(CommitmentOpeningBackend):
 
         except Exception:
             return False
+
+    def generate_membership_proof(
+        self,
+        identity_scalar: Bn,
+        blinding: Bn,
+        merkle_path: List[Tuple[bytes, bool]],
+        root: bytes,
+        context: ProofContext,
+    ) -> ZKProof:
+        """
+        Generate anonymity set membership proof (Phase 2B).
+
+        This is a thin wrapper around membership.py implementation.
+        """
+        from .membership import (
+            generate_membership_proof as _gen,
+        )
+
+        ctx_hash = hashlib.sha256(context.to_bytes()).digest()
+
+        return _gen(
+            identity_scalar=identity_scalar,
+            blinding=blinding,
+            merkle_path=merkle_path,
+            root=root,
+            ctx_hash=ctx_hash,
+        )
+
+    def verify_membership_proof(self, proof: ZKProof) -> bool:
+        """
+        Verify anonymity set membership proof (Phase 2B).
+        """
+        from .membership import (
+            verify_membership_proof as _verify,
+        )
+        return _verify(proof)
 
     def batch_verify(self, proofs: List[ZKProof]) -> bool:
         """

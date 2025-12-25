@@ -4,13 +4,22 @@ import pytest
 from petlib.ec import EcGroup
 from petlib.bn import Bn
 
-from privacy_protocol.pedersen.membership import (
-    generate_membership_proof,
-    verify_membership_proof,
-    g, h, order
-)
-from privacy_protocol.merkle import hash_leaf, build_tree, DOMAIN_SEPARATORS_2B
-from privacy_protocol.types import ProofContext
+try:
+    from privacy_protocol.pedersen.membership import (
+        generate_membership_proof,
+        verify_membership_proof,
+        g, h, order
+    )
+    from privacy_protocol.merkle import hash_leaf, build_tree, DOMAIN_SEPARATORS_2B
+    from privacy_protocol.types import ProofContext
+except ModuleNotFoundError:
+    from ..membership import (
+        generate_membership_proof,
+        verify_membership_proof,
+        g, h, order
+    )
+    from ...merkle import hash_leaf, build_tree, DOMAIN_SEPARATORS_2B
+    from ...types import ProofContext
 
 
 def _build_anonymity_set(count: int = 4):
