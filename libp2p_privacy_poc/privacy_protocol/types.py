@@ -222,6 +222,48 @@ class ZKProof:
             str: Description of what the proof claims
         """
         return f"{self.proof_type} proof"
+
+    # ========================================================================
+    # PHASE 2B STATEMENT METADATA HELPERS
+    # ========================================================================
+
+    def get_statement_type(self) -> Optional[str]:
+        """Get statement type from public_inputs (Phase 2B)"""
+        return self.public_inputs.get("statement_type")
+
+    def get_statement_version(self) -> Optional[int]:
+        """Get statement version from public_inputs (Phase 2B)"""
+        return self.public_inputs.get("statement_version")
+
+    def is_phase2b_proof(self) -> bool:
+        """Check if this is a Phase 2B statement proof"""
+        return "statement_type" in self.public_inputs
+
+    def validate_statement_metadata(self) -> None:
+        """
+        Validate Phase 2B statement metadata if present.
+        Phase 2A proofs (no statement_type) pass validation.
+        """
+        if not self.is_phase2b_proof():
+            return  # Phase 2A proof, skip validation
+
+        from .statements import (
+            StatementType,
+            validate_public_inputs,
+        )
+
+        statement_type_str = self.get_statement_type()
+
+        # Convert string to enum
+        try:
+            statement_type = StatementType(statement_type_str)
+        except ValueError:
+            raise ValueError(f"Invalid statement type: {statement_type_str}")
+
+        # Validate public inputs against schema
+        validate_public_inputs(statement_type, self.public_inputs)
+
+
     
     @classmethod
     def from_mock_proof(cls, mock_proof) -> 'ZKProof':
