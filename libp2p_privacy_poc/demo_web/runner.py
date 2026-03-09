@@ -53,10 +53,10 @@ def extract_analyzer_multiaddr(log_text: str) -> Optional[str]:
 
 def classify_run_status(core_error: bool, fallback_detected: bool) -> Tuple[str, str]:
     if core_error:
-        return "failed", "Demo orchestration failed."
+        return "failed", "Orchestration failed."
     if fallback_detected:
         return "fallback", "Fallback detected during analysis."
-    return "success", "Demo orchestration completed successfully."
+    return "success", "Orchestration completed successfully."
 
 
 class DemoRunner:
