@@ -4,22 +4,41 @@ Command-Line Interface for Privacy Protocol Toolkit for P2P (py-libp2p)
 Provides easy-to-use commands for privacy analysis, reporting, and demonstrations.
 """
 
-import click
 import json
 import logging
 import platform
 import subprocess
 import sys
 import time
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
+import click
 from libp2p import new_host
 from multiaddr import Multiaddr
 
-from libp2p_privacy_poc import print_disclaimer
+from libp2p_privacy_poc import __version__, print_disclaimer
+from libp2p_privacy_poc.filecoin_pin import (
+    ProofVerificationRecord,
+    PinClientError,
+    RecordValidationError,
+    build_hashes,
+    decode_record,
+    encode_record,
+    fetch_bytes,
+    pin_bytes,
+    record_to_dict,
+)
 from libp2p_privacy_poc.metadata_collector import MetadataCollector
 from libp2p_privacy_poc.privacy_analyzer import PrivacyAnalyzer
+from libp2p_privacy_poc.privacy_protocol.snark.backend import SnarkBackend
+from libp2p_privacy_poc.network.privacyzk.assets import AssetsResolver
+from libp2p_privacy_poc.network.privacyzk.constants import (
+    DEFAULT_MEMBERSHIP_DEPTH,
+    SNARK_SCHEMA_V,
+)
 from libp2p_privacy_poc.mock_zk_proofs import MockZKProofSystem
 from libp2p_privacy_poc.report_generator import ReportGenerator
 from libp2p_privacy_poc.zk_integration import (
@@ -88,6 +107,45 @@ def _build_reproducibility(assets_dir: Optional[str]) -> dict:
         "python_version": platform.python_version(),
         "os": platform.platform(),
         "assets_dir": assets_dir,
+    }
+
+
+@dataclass(frozen=True)
+class _PinRecordResult:
+    statement: str
+    schema: int
+    depth: int
+    verify_ok: bool
+    cid: Optional[str]
+    error: Optional[str]
+
+
+def _statement_depth_for_pin(statement: str, cli_depth: Optional[int]) -> int:
+    if statement == "membership":
+        if cli_depth is None:
+            return DEFAULT_MEMBERSHIP_DEPTH
+        if cli_depth < 1:
+            raise click.ClickException("Depth must be >= 1 for membership")
+        return cli_depth
+    if cli_depth is not None and cli_depth != 0:
+        raise click.ClickException("Depth must be 0 for continuity/unlinkability")
+    return 0
+
+
+def _make_pin_timestamp() -> str:
+    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace(
+        "+00:00", "Z"
+    )
+
+
+def _pin_result_to_dict(result: _PinRecordResult) -> dict:
+    return {
+        "statement": result.statement,
+        "schema": result.schema,
+        "depth": result.depth,
+        "verify_ok": result.verify_ok,
+        "cid": result.cid,
+        "error": result.error,
     }
 
 
@@ -1057,6 +1115,282 @@ def zk_dial(peer, count, duration):
     except Exception as exc:
         click.echo(f"Dial failed: {_format_exception(exc)}", err=True)
         sys.exit(1)
+
+
+@main.command(name="pin-proof-record")
+@click.option(
+    "--statement",
+    type=click.Choice(["membership", "continuity", "unlinkability", "all"], case_sensitive=False),
+    default="membership",
+    show_default=True,
+    help="Statement to pin (or all)",
+)
+@click.option(
+    "--assets-dir",
+    type=click.Path(),
+    default="privacy_circuits/params",
+    show_default=True,
+    help="Base directory for verifier assets",
+)
+@click.option(
+    "--schema",
+    type=int,
+    default=SNARK_SCHEMA_V,
+    show_default=True,
+    help="SNARK schema version",
+)
+@click.option(
+    "--depth",
+    type=int,
+    default=None,
+    help="Merkle depth for membership (defaults: membership=16, others=0)",
+)
+@click.option(
+    "--prove-mode",
+    type=click.Choice(["real", "fixture"], case_sensitive=False),
+    default="fixture",
+    show_default=True,
+    help="Recorded proving mode metadata",
+)
+@click.option(
+    "--peer-id",
+    type=str,
+    default=None,
+    help="Optional peer id metadata",
+)
+@click.option(
+    "--peer-multiaddr",
+    type=str,
+    default=None,
+    help="Optional peer multiaddr metadata",
+)
+@click.option(
+    "--json",
+    "as_json",
+    is_flag=True,
+    help="Output JSON summary",
+)
+def pin_proof_record(
+    statement,
+    assets_dir,
+    schema,
+    depth,
+    prove_mode,
+    peer_id,
+    peer_multiaddr,
+    as_json,
+):
+    """
+    Verify proof artifacts and pin a CBOR verification record.
+
+    This command uses an external pinning service. Do not store secrets in record metadata.
+    """
+    if schema < 1:
+        raise click.ClickException("Schema must be >= 1")
+
+    statements: List[str]
+    if statement == "all":
+        statements = ["membership", "continuity", "unlinkability"]
+    else:
+        statements = [statement]
+
+    resolver = AssetsResolver(assets_dir)
+    results: List[_PinRecordResult] = []
+
+    for current_statement in statements:
+        if statement == "all" and current_statement != "membership":
+            current_depth = _statement_depth_for_pin(current_statement, None)
+        else:
+            current_depth = _statement_depth_for_pin(current_statement, depth)
+
+        try:
+            fixture = resolver.resolve_fixture(current_statement, schema, current_depth)
+            vk_bytes = fixture.vk_path.read_bytes()
+            public_inputs_bytes = fixture.public_inputs_path.read_bytes()
+            proof_bytes = fixture.proof_path.read_bytes()
+        except Exception as exc:
+            results.append(
+                _PinRecordResult(
+                    statement=current_statement,
+                    schema=schema,
+                    depth=current_depth,
+                    verify_ok=False,
+                    cid=None,
+                    error=f"asset load failed: {exc}",
+                )
+            )
+            continue
+
+        try:
+            verified = SnarkBackend.verify(
+                statement_type=current_statement,
+                schema_version=schema,
+                vk=vk_bytes,
+                public_inputs=public_inputs_bytes,
+                proof=proof_bytes,
+            )
+        except Exception as exc:
+            results.append(
+                _PinRecordResult(
+                    statement=current_statement,
+                    schema=schema,
+                    depth=current_depth,
+                    verify_ok=False,
+                    cid=None,
+                    error=f"verification failed: {exc}",
+                )
+            )
+            continue
+
+        hashes = build_hashes(vk_bytes, public_inputs_bytes, proof_bytes)
+        record = ProofVerificationRecord(
+            v=1,
+            statement_type=current_statement,
+            schema_v=schema,
+            depth=current_depth,
+            ts_utc=_make_pin_timestamp(),
+            hashes=hashes,
+            verify_ok=bool(verified),
+            prove_mode=prove_mode.lower(),
+            assets_path=str(fixture.vk_path.parent),
+            fixture_id=f"{current_statement}/v{schema}/depth-{current_depth}",
+            tool_name="privacy-protocol-toolkit-p2p",
+            tool_version=__version__,
+            peer_id=peer_id,
+            peer_multiaddr=peer_multiaddr,
+        )
+        encoded = encode_record(record)
+        try:
+            cid = pin_bytes(
+                encoded,
+                name=f"{current_statement}-v{schema}-depth-{current_depth}",
+            )
+        except PinClientError as exc:
+            results.append(
+                _PinRecordResult(
+                    statement=current_statement,
+                    schema=schema,
+                    depth=current_depth,
+                    verify_ok=bool(verified),
+                    cid=None,
+                    error=str(exc),
+                )
+            )
+            continue
+
+        verify_error = None if verified else "verification failed"
+        results.append(
+            _PinRecordResult(
+                statement=current_statement,
+                schema=schema,
+                depth=current_depth,
+                verify_ok=bool(verified),
+                cid=cid,
+                error=verify_error,
+            )
+        )
+
+    payload = {"results": [_pin_result_to_dict(item) for item in results]}
+    if as_json:
+        click.echo(json.dumps(payload))
+    else:
+        for item in results:
+            status = "verified" if item.verify_ok else "not-verified"
+            if item.cid:
+                click.echo(
+                    f"{item.statement}_v{item.schema} depth={item.depth}: "
+                    f"{status}, cid={item.cid}"
+                )
+            else:
+                click.echo(
+                    f"{item.statement}_v{item.schema} depth={item.depth}: "
+                    f"error={item.error}"
+                )
+
+    has_errors = any(item.error and item.cid is None for item in results)
+    if has_errors:
+        sys.exit(1)
+    if any(not item.verify_ok for item in results):
+        sys.exit(2)
+    sys.exit(0)
+
+
+@main.command(name="fetch-proof-record")
+@click.option("--cid", required=True, help="CID returned by pin-proof-record")
+@click.option(
+    "--recheck-assets-dir",
+    type=click.Path(),
+    default=None,
+    help="Optional local assets dir for hash re-check",
+)
+@click.option(
+    "--json",
+    "as_json",
+    is_flag=True,
+    help="Output JSON summary",
+)
+def fetch_proof_record(cid, recheck_assets_dir, as_json):
+    """
+    Fetch, decode, and optionally re-check a pinned proof verification record.
+    """
+    try:
+        raw = fetch_bytes(cid)
+        record = decode_record(raw)
+    except (PinClientError, RecordValidationError) as exc:
+        click.echo(f"Error: {exc}", err=True)
+        sys.exit(1)
+    except Exception as exc:
+        click.echo(f"Error: {_format_exception(exc)}", err=True)
+        sys.exit(1)
+
+    payload = record_to_dict(record)
+    payload["cid"] = cid
+
+    status = 0
+    if recheck_assets_dir:
+        try:
+            resolver = AssetsResolver(recheck_assets_dir)
+            fixture = resolver.resolve_fixture(
+                record.statement_type, record.schema_v, record.depth
+            )
+            local_hashes = build_hashes(
+                fixture.vk_path.read_bytes(),
+                fixture.public_inputs_path.read_bytes(),
+                fixture.proof_path.read_bytes(),
+            )
+            matches = (
+                local_hashes.vk_sha256 == record.hashes.vk_sha256
+                and local_hashes.public_inputs_sha256
+                == record.hashes.public_inputs_sha256
+                and local_hashes.proof_sha256 == record.hashes.proof_sha256
+            )
+            payload["recheck"] = {
+                "ok": matches,
+                "assets_dir": recheck_assets_dir,
+            }
+            if not matches:
+                status = 2
+        except Exception as exc:
+            payload["recheck"] = {
+                "ok": False,
+                "assets_dir": recheck_assets_dir,
+                "error": str(exc),
+            }
+            status = 1
+
+    if as_json:
+        click.echo(json.dumps(payload))
+    else:
+        click.echo(
+            f"{payload['statement_type']}_v{payload['schema_v']} depth={payload['depth']}"
+        )
+        click.echo(f"verify_ok: {payload['verify_ok']}")
+        click.echo(f"prove_mode: {payload['prove_mode']}")
+        click.echo(f"tool: {payload['tool_name']}@{payload['tool_version']}")
+        if "recheck" in payload:
+            click.echo(f"recheck_ok: {payload['recheck']['ok']}")
+
+    sys.exit(status)
 
 
 def _format_exception(exc: BaseException) -> str:
