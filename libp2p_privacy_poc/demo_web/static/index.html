@@ -8,14 +8,49 @@
   </head>
   <body>
     <main class="container">
-      <h1>Privacy Protocol Toolkit Demo Dashboard</h1>
-      <p class="subtitle">
-        Step 1 skeleton is active. Run orchestration, API, and live cards are added in later steps.
-      </p>
-      <button id="run-btn" disabled>Run Full Demo (coming next step)</button>
-      <pre id="health"></pre>
+      <header class="topbar">
+        <h1>Privacy Protocol Toolkit Dashboard</h1>
+        <button id="run-btn">Run Full Demo</button>
+      </header>
+
+      <section class="card banner" id="banner">
+        Ready. Click "Run Full Demo".
+      </section>
+
+      <section class="grid two-col">
+        <div class="card">
+          <h2>Statement Verification</h2>
+          <div class="statements" id="statement-cards"></div>
+        </div>
+        <div class="card">
+          <h2>Traffic</h2>
+          <div id="traffic-panel" class="kv"></div>
+        </div>
+      </section>
+
+      <section class="grid two-col">
+        <div class="card">
+          <h2>Pin Result</h2>
+          <div id="pin-panel" class="kv"></div>
+        </div>
+        <div class="card">
+          <h2>Artifacts</h2>
+          <div id="artifact-links" class="links"></div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Logs</h2>
+        <div class="log-controls" id="log-controls"></div>
+        <pre id="log-viewer">No log selected.</pre>
+      </section>
+
+      <section class="card">
+        <h2>Run Metadata</h2>
+        <pre id="run-json">No run yet.</pre>
+      </section>
     </main>
+
     <script src="/app.js"></script>
   </body>
 </html>
-

@@ -1190,8 +1190,6 @@ def demo_web(
 ):
     """
     Start the local web dashboard for the end-to-end demo workflow.
-
-    Step 1 starts a minimal skeleton server; orchestration is added in later steps.
     """
     config = DemoWebConfig(
         host=host,
@@ -1209,9 +1207,8 @@ def demo_web(
         raise click.ClickException(str(exc)) from exc
 
     _configure_logging(config.log_level)
-    click.echo("Starting demo dashboard skeleton...")
+    click.echo("Starting demo dashboard...")
     click.echo(f"Open: http://{config.host}:{config.port}/")
-    click.echo("Warning: this is Step 1 skeleton; run orchestration is not yet enabled.")
     try:
         run_demo_server(config)
     except KeyboardInterrupt:
