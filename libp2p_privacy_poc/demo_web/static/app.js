@@ -3,6 +3,7 @@ const bannerEl = document.getElementById("banner");
 const runJsonEl = document.getElementById("run-json");
 const statementCardsEl = document.getElementById("statement-cards");
 const trafficPanelEl = document.getElementById("traffic-panel");
+const proofSummaryEl = document.getElementById("proof-summary");
 const pinPanelEl = document.getElementById("pin-panel");
 const artifactLinksEl = document.getElementById("artifact-links");
 const logControlsEl = document.getElementById("log-controls");
@@ -16,11 +17,21 @@ function setBanner(status, message) {
   bannerEl.className = `card banner banner-${status}`;
 }
 
+function formatMs(value) {
+  if (!Number.isFinite(value)) return "n/a";
+  return `${Number(value).toFixed(3)} ms`;
+}
+
+function shortHash(hashText) {
+  if (typeof hashText !== "string" || hashText.length < 12) return "n/a";
+  return `${hashText.slice(0, 12)}...`;
+}
+
 function statementMapFrom(payload) {
   const empty = {
-    membership_v2: { verified: false, mode: "n/a", timing: "n/a" },
-    continuity_v2: { verified: false, mode: "n/a", timing: "n/a" },
-    unlinkability_v2: { verified: false, mode: "n/a", timing: "n/a" },
+    membership_v2: { verified: false, mode: "n/a", verifyTime: "n/a", exchangeTime: "n/a" },
+    continuity_v2: { verified: false, mode: "n/a", verifyTime: "n/a", exchangeTime: "n/a" },
+    unlinkability_v2: { verified: false, mode: "n/a", verifyTime: "n/a", exchangeTime: "n/a" },
   };
 
   const report = payload.report || {};
@@ -30,11 +41,13 @@ function statementMapFrom(payload) {
   for (const row of rows) {
     if (!row || !row.statement || !(row.statement in empty)) continue;
     const meta = row.meta || {};
-    const timingMs = meta.round_trip_ms ?? meta.verify_ms ?? meta.elapsed_ms;
+    const verifyMs = row.verify_ms ?? meta.verify_ms ?? meta.elapsed_ms;
+    const exchangeMs = row.exchange_ms ?? meta.exchange_ms ?? meta.round_trip_ms;
     empty[row.statement] = {
       verified: row.verified === true,
       mode: row.prove_mode || meta.prove_mode || row.mode || "n/a",
-      timing: Number.isFinite(timingMs) ? `${timingMs} ms` : "n/a",
+      verifyTime: formatMs(verifyMs),
+      exchangeTime: formatMs(exchangeMs),
     };
   }
 
@@ -53,7 +66,8 @@ function renderStatements(payload) {
         ${row.verified ? "verified" : "not verified"}
       </div>
       <div class="statement-meta">prove_mode: ${row.mode}</div>
-      <div class="statement-meta">timing: ${row.timing}</div>
+      <div class="statement-meta">verify: ${row.verifyTime}</div>
+      <div class="statement-meta">exchange: ${row.exchangeTime}</div>
     `;
     statementCardsEl.appendChild(div);
   }
@@ -69,6 +83,55 @@ function renderTraffic(payload) {
     <div><strong>Requested traffic nodes:</strong> ${requested}</div>
     <div><strong>Observed unique peers:</strong> ${observed}</div>
     <div><strong>Total connections:</strong> ${connections}</div>
+  `;
+}
+
+function renderProofSummary(payload) {
+  const report = payload.report || {};
+  const summary = report.proof_exchange_summary || {};
+  const statements = Array.isArray(summary.statements) ? summary.statements : [];
+  if (!statements.length) {
+    proofSummaryEl.innerHTML = "<div>No proof exchange summary available.</div>";
+    return;
+  }
+
+  const rows = statements
+    .map((row) => {
+      const verified = row.verified === true ? "✓" : "✗";
+      const assetHash = shortHash(((row.asset_source || {}).sha256));
+      return `
+        <tr>
+          <td>${row.statement || "n/a"}</td>
+          <td>${verified}</td>
+          <td>v${row.schema_v ?? "n/a"}</td>
+          <td>${row.depth ?? "n/a"}</td>
+          <td>${row.prove_mode || "n/a"}</td>
+          <td>${formatMs(row.verify_ms)}</td>
+          <td>${formatMs(row.exchange_ms)}</td>
+          <td>${assetHash}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  proofSummaryEl.innerHTML = `
+    <div><strong>Protocol:</strong> ${summary.protocol_id || "n/a"}</div>
+    <div><strong>Peer:</strong> ${summary.peer_multiaddr || "n/a"}</div>
+    <table class="summary-table">
+      <thead>
+        <tr>
+          <th>Statement</th>
+          <th>OK</th>
+          <th>Schema</th>
+          <th>Depth</th>
+          <th>Mode</th>
+          <th>Verify</th>
+          <th>Exchange</th>
+          <th>Asset Hash</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
   `;
 }
 
@@ -113,10 +176,14 @@ function renderArtifactLinks(payload) {
   }
 }
 
-function renderLogControls() {
+function renderLogControls(payload) {
   logControlsEl.innerHTML = "";
   if (!currentRunId) {
     logControlsEl.textContent = "No run yet.";
+    return;
+  }
+  if (payload.status === "running" || !payload.summary) {
+    logControlsEl.textContent = "Logs become available after run completion.";
     return;
   }
 
@@ -128,7 +195,14 @@ function renderLogControls() {
       try {
         const res = await fetch(`/api/runs/${currentRunId}/logs/${name}`);
         if (!res.ok) {
-          throw new Error(`HTTP ${res.status}`);
+          let detail = "";
+          try {
+            const payload = await res.json();
+            detail = payload.error ? `: ${payload.error}` : "";
+          } catch (_err) {
+            detail = "";
+          }
+          throw new Error(`HTTP ${res.status}${detail}`);
         }
         logViewerEl.textContent = await res.text();
       } catch (err) {
@@ -143,9 +217,10 @@ function renderRun(payload) {
   runJsonEl.textContent = JSON.stringify(payload, null, 2);
   renderStatements(payload);
   renderTraffic(payload);
+  renderProofSummary(payload);
   renderPin(payload);
   renderArtifactLinks(payload);
-  renderLogControls();
+  renderLogControls(payload);
 
   if (payload.status === "running") {
     setBanner("running", "Run in progress...");
