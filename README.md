@@ -64,6 +64,8 @@ grep -n "falling back to legacy simulation" "$LATEST_REPORT" || true
 - `privacy-protocol-toolkit-p2p zk-serve`
 - `privacy-protocol-toolkit-p2p zk-verify`
 - `privacy-protocol-toolkit-p2p zk-dial`
+- `privacy-protocol-toolkit-p2p pin-proof-record` (opt-in)
+- `privacy-protocol-toolkit-p2p fetch-proof-record` (opt-in)
 
 Compatibility alias:
 - `libp2p-privacy` remains available.
@@ -71,6 +73,33 @@ Compatibility alias:
 ## Notes
 - Canonical defaults and demo portability are documented in `docs/DEMO_CONTRACT.md`.
 - Full doc index is in `docs/DOCUMENTATION.md`.
+
+## Filecoin Pin (Opt-In)
+Warning: this integration depends on an external pinning service and should not be
+used to store secrets.
+
+Environment variables:
+- `FILECOIN_PIN_ENDPOINT`
+- `FILECOIN_PIN_TOKEN`
+- `FILECOIN_PIN_TIMEOUT_SECONDS` (optional, default `10`)
+
+Local (no live pin service needed):
+```bash
+PYTHONPATH=. pytest -q libp2p_privacy_poc/filecoin_pin/tests/test_cli_pin.py
+```
+
+Live pin demo:
+```bash
+export FILECOIN_PIN_ENDPOINT="<pin-service-base-url>"
+export FILECOIN_PIN_TOKEN="<token>"
+privacy-protocol-toolkit-p2p pin-proof-record \
+  --statement membership \
+  --assets-dir privacy_circuits/params \
+  --prove-mode real
+
+privacy-protocol-toolkit-p2p fetch-proof-record --cid <CID> \
+  --recheck-assets-dir privacy_circuits/params
+```
 
 ## License
 MIT
