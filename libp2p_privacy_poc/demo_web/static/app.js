@@ -110,24 +110,43 @@ function renderOverviewStats(payload) {
 }
 
 function renderRiskPanel(payload) {
+  const report = payload.report || {};
+  const privacyReport = report.privacy_report || {};
+  const scoreRaw = privacyReport.overall_risk_score;
+  const levelRaw = privacyReport.risk_level;
+  const score = Number.isFinite(Number(scoreRaw)) ? Number(scoreRaw) : null;
+
   const map = statementMapFrom(payload);
   const verified = Object.values(map).filter((r) => r.verified).length;
 
-  let riskLevel, riskColor, riskPct;
-  if (verified === 3) {
-    riskLevel = "Low Risk";
+  let riskLevel;
+  if (typeof levelRaw === "string" && levelRaw.trim()) {
+    riskLevel = levelRaw.toUpperCase();
+  } else if (score !== null) {
+    if (score >= 0.75) riskLevel = "CRITICAL";
+    else if (score >= 0.5) riskLevel = "HIGH";
+    else if (score >= 0.25) riskLevel = "MEDIUM";
+    else riskLevel = "LOW";
+  } else {
+    // Fallback only when report score is unavailable.
+    if (verified === 3) riskLevel = "LOW";
+    else if (verified === 2) riskLevel = "MEDIUM";
+    else if (verified === 1) riskLevel = "HIGH";
+    else riskLevel = "CRITICAL";
+  }
+
+  let riskColor = "var(--warn)";
+  let riskPct = 50;
+  if (riskLevel === "LOW") {
     riskColor = "var(--ok)";
     riskPct = 15;
-  } else if (verified === 2) {
-    riskLevel = "Medium Risk";
+  } else if (riskLevel === "MEDIUM") {
     riskColor = "var(--warn)";
     riskPct = 55;
-  } else if (verified === 1) {
-    riskLevel = "Elevated Risk";
+  } else if (riskLevel === "HIGH") {
     riskColor = "var(--warn)";
     riskPct = 75;
-  } else {
-    riskLevel = "High Risk";
+  } else if (riskLevel === "CRITICAL") {
     riskColor = "var(--bad)";
     riskPct = 95;
   }
@@ -148,7 +167,9 @@ function renderRiskPanel(payload) {
       `</div>` +
       `<div>` +
         `<div class="risk-label" style="color:${riskColor};font-size:1.15rem">${riskLevel}</div>` +
-        `<div style="color:var(--text-muted);font-size:0.78rem;margin-top:2px">${verified} of 3 proofs verified</div>` +
+        `<div style="color:var(--text-muted);font-size:0.78rem;margin-top:2px">` +
+          `Risk from network analysis${score !== null ? ` (${score.toFixed(2)}/1.00)` : ""}` +
+        `</div>` +
       `</div>` +
     `</div>` +
     `<div class="mini-bar-group" style="margin-top:16px">` +
