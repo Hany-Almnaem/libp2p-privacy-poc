@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from click.testing import CliRunner
+import pytest
 
 from libp2p_privacy_poc import cli
 
@@ -34,3 +35,19 @@ def test_zk_verify_rejects_bad_depth() -> None:
         ],
     )
     assert result.exit_code != 0
+
+
+def test_demo_web_help() -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli.main, ["demo-web", "--help"])
+    assert result.exit_code == 0
+    assert "--traffic-nodes" in result.output
+    assert "--pin-mode" in result.output
+
+
+@pytest.mark.parametrize("count", [7, 14])
+def test_demo_web_rejects_traffic_nodes_out_of_range(count: int) -> None:
+    runner = CliRunner()
+    result = runner.invoke(cli.main, ["demo-web", "--traffic-nodes", str(count)])
+    assert result.exit_code != 0
+    assert "traffic-nodes must be in range 8..13" in result.output

@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Privacy Protocol Toolkit - Demo Dashboard</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="container">
+
+      <header class="topbar">
+        <div class="topbar-brand">
+          <div class="topbar-logo">P</div>
+          <h1>Privacy Protocol <span>Dashboard</span></h1>
+        </div>
+        <button class="btn-primary" id="run-btn">&#9654; Run E2E Validation </button>
+      </header>
+
+      <section class="card banner banner-ready" id="banner">
+        Ready. Click "Run Full Demo".
+      </section>
+
+      <!-- Overview Stats Row -->
+      <section class="grid overview-row section-gap" id="overview-row">
+        <div class="card stat-box">
+          <div class="stat-value stat-accent" id="ov-verified">—</div>
+          <div class="stat-label">Verified Proofs</div>
+        </div>
+        <div class="card stat-box">
+          <div class="stat-value stat-accent" id="ov-peers">—</div>
+          <div class="stat-label">Unique Peers</div>
+        </div>
+        <div class="card stat-box">
+          <div class="stat-value stat-accent" id="ov-connections">—</div>
+          <div class="stat-label">Total Connections</div>
+        </div>
+      </section>
+
+      <!-- Statement Verification Cards -->
+      <section class="card section-gap">
+        <h2>Statement Verification</h2>
+        <div class="statements" id="statement-cards"></div>
+      </section>
+
+      <!-- Timing Comparison Chart -->
+      <section class="card section-gap">
+        <h2>Timing Comparison</h2>
+        <div id="timing-chart" class="timing-chart">
+          <div class="empty-state">Run the demo to see timing data.</div>
+        </div>
+      </section>
+
+      <!-- Proof Exchange Summary -->
+      <section class="card section-gap">
+        <h2>Proof Exchange Summary</h2>
+        <div id="proof-summary" class="kv">
+          <div class="empty-state">No proof exchange summary available.</div>
+        </div>
+      </section>
+
+      <!-- Risk Score & Network -->
+      <section class="grid two-col section-gap">
+        <div class="card">
+          <h2>Risk Assessment</h2>
+          <div id="risk-panel">
+            <div class="empty-state">Awaiting verification results.</div>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Network Stats</h2>
+          <div id="traffic-panel" class="kv">
+            <div class="empty-state">No traffic data yet.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Pin Result & Artifacts -->
+      <section class="grid two-col section-gap">
+        <div class="card">
+          <h2>Pin Result</h2>
+          <div id="pin-panel" class="kv">
+            <div class="empty-state">No pin data yet.</div>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Artifacts</h2>
+          <div id="artifact-links" class="links">
+            <div class="empty-state">No run yet.</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Logs -->
+      <section class="card section-gap">
+        <h2>Logs</h2>
+        <div class="log-controls" id="log-controls"></div>
+        <pre id="log-viewer">No log selected.</pre>
+      </section>
+
+      <!-- Run Metadata (collapsible) -->
+      <section class="card">
+        <button class="collapse-toggle" id="metadata-toggle" type="button">
+          <span class="arrow">&#9654;</span> Run Metadata
+        </button>
+        <div class="collapsible-body" id="metadata-body">
+          <pre id="run-json" style="margin-top:12px">No run yet.</pre>
+        </div>
+      </section>
+
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>

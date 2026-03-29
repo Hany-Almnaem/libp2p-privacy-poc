@@ -31,6 +31,7 @@ from libp2p_privacy_poc.filecoin_pin import (
     pin_bytes,
     record_to_dict,
 )
+from libp2p_privacy_poc.demo_web import DemoWebConfig, run_demo_server
 from libp2p_privacy_poc.metadata_collector import MetadataCollector
 from libp2p_privacy_poc.privacy_analyzer import PrivacyAnalyzer
 from libp2p_privacy_poc.privacy_protocol.snark.backend import SnarkBackend
@@ -1115,6 +1116,103 @@ def zk_dial(peer, count, duration):
     except Exception as exc:
         click.echo(f"Dial failed: {_format_exception(exc)}", err=True)
         sys.exit(1)
+
+
+@main.command(name="demo-web")
+@click.option(
+    "--host",
+    type=str,
+    default="127.0.0.1",
+    show_default=True,
+    help="Dashboard listen host",
+)
+@click.option(
+    "--port",
+    type=int,
+    default=8080,
+    show_default=True,
+    help="Dashboard listen port",
+)
+@click.option(
+    "--assets-dir",
+    type=click.Path(),
+    default="privacy_circuits/params",
+    show_default=True,
+    help="Base directory for verifier assets",
+)
+@click.option(
+    "--analyze-duration",
+    type=int,
+    default=20,
+    show_default=True,
+    help="Analysis capture duration in seconds",
+)
+@click.option(
+    "--zk-timeout",
+    type=int,
+    default=120,
+    show_default=True,
+    help="ZK request timeout in seconds",
+)
+@click.option(
+    "--traffic-nodes",
+    type=int,
+    default=12,
+    show_default=True,
+    help="Synthetic traffic dialer count (must be 8..13)",
+)
+@click.option(
+    "--pin-mode",
+    type=click.Choice(["prefer-live", "live", "mock"], case_sensitive=False),
+    default="prefer-live",
+    show_default=True,
+    help="Pin backend mode (skeleton wiring in this step)",
+)
+@click.option(
+    "--log-level",
+    type=click.Choice(
+        ["debug", "info", "warning", "error", "critical"],
+        case_sensitive=False,
+    ),
+    default="warning",
+    show_default=True,
+    help="Dashboard service logging level",
+)
+def demo_web(
+    host,
+    port,
+    assets_dir,
+    analyze_duration,
+    zk_timeout,
+    traffic_nodes,
+    pin_mode,
+    log_level,
+):
+    """
+    Start the local web dashboard for the end-to-end demo workflow.
+    """
+    config = DemoWebConfig(
+        host=host,
+        port=port,
+        assets_dir=assets_dir,
+        analyze_duration=analyze_duration,
+        zk_timeout=zk_timeout,
+        traffic_nodes=traffic_nodes,
+        pin_mode=pin_mode.lower(),
+        log_level=log_level.lower(),
+    )
+    try:
+        config.validate()
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    _configure_logging(config.log_level)
+    click.echo("Starting demo dashboard...")
+    click.echo(f"Open: http://{config.host}:{config.port}/")
+    try:
+        run_demo_server(config)
+    except KeyboardInterrupt:
+        click.echo("\nStopping demo dashboard...")
 
 
 @main.command(name="pin-proof-record")
